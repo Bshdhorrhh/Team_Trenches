@@ -297,6 +297,9 @@ export default function App() {
     setAbortController(controller);
 
     try {
+      // Show a cold-start hint — model loading takes 2-4 minutes on first run
+      setCurrentLogs(["🧊 Cold start: loading AI models into GPU memory (2-4 min on first run, instant after)..."]);
+
       const res = await fetch(`${serverUrl}/api/chat`, {
         method: "POST",
         credentials: "include",
@@ -414,6 +417,8 @@ export default function App() {
     } catch (err) {
       if (err.name === "AbortError") {
         setHistory(prev => [...prev, { type: "ai", text: fullText || "Cancelled." }]);
+      } else if (err.message && (err.message.toLowerCase().includes("networkerror") || err.message.toLowerCase().includes("failed to fetch"))) {
+        setHistory(prev => [...prev, { type: "ai", text: `❌ **Cannot reach backend.**\n\n**Backend not started?** Open a terminal and run:\n\`\`\`\nsource venv/bin/activate\npython backend/app.py\n\`\`\`\nWait for: \`Uvicorn running on http://127.0.0.1:8000\`\n\n**First prompt?** If the backend IS running, the models are still loading into GPU memory — this takes **2-4 minutes on first run**. Please wait and try again.` }]);
       } else {
         setHistory(prev => [...prev, { type: "ai", text: `Error: ${err.message}` }]);
       }
