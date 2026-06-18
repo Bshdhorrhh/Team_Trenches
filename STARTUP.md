@@ -1,128 +1,103 @@
 # 🚀 DeepThinker — Startup Guide
 
-> **Prerequisites:** Ensure you have completed the one-time installation steps in [README_SETUP.md](./README_SETUP.md) first.
+> **Prerequisites:** Complete the one-time installation in [README_SETUP.md](./README_SETUP.md) first.
 
 ---
 
-## ⚡ Method 1: One-Command Start (Linux Only — `start.sh`)
+## ✅ Recommended: Manual Two-Terminal Method
 
-For Ubuntu/Linux users, the easiest way to start is with the provided shell script:
-
-```bash
-bash start.sh
-```
-
-The script will:
-1. Kill any leftover processes from previous runs on ports `8000` and `5173`
-2. Set Intel iGPU environment variables automatically
-3. Launch the backend and verify it is actually running before starting the frontend
-4. Print `🟢 Both servers are running!` when everything is healthy
-
-> ⚠️ **Warning: `start.sh` may sometimes fail.** If it shows `❌ Backend failed to start` or `Address already in use`, use **Method 2** (manual two-terminal method) below — it is 100% reliable on all platforms. The script does its best to clean up stale processes, but on Linux, the OS occasionally holds onto a port for a few extra seconds after a crash.
-
-**If `start.sh` fails, run this once to fully clear all stale processes, then retry:**
-```bash
-pkill -f "backend/app.py"; pkill -f "vite"; sleep 3 && bash start.sh
-```
-
-**To stop everything:**
-Press `Ctrl+C` in the terminal. The script will automatically kill both servers.
+This is the most reliable way to run DeepThinker on any operating system. Open **two separate terminal windows** in the project root folder.
 
 ---
 
-## 🛡️ Method 2: Manual Two-Terminal Start (Recommended — Works on All Platforms)
+### 🐧 Ubuntu / Linux
 
-This is the most reliable method. Open **two separate terminal windows** in the project folder.
-
-### Quick Reference
-
-| Platform | Terminal 1 (Backend) | Terminal 2 (Frontend) |
-|---|---|---|
-| **Ubuntu / Linux** | `source venv/bin/activate && python backend/app.py` | `cd frontend && npm run dev` |
-| **Mac (Apple Silicon)** | `source venv/bin/activate && python backend/app.py` | `cd frontend && npm run dev` |
-| **Windows (CMD)** | `venv\Scripts\activate && python backend\app.py` | `cd frontend && npm run dev` |
-| **Windows (PowerShell)** | `venv\Scripts\Activate.ps1; python backend\app.py` | `cd frontend; npm run dev` |
-
----
-
-### 🐧 Ubuntu / Linux — Step by Step
-
-**Terminal 1 — Backend:**
+**Terminal 1 — Start the Backend (AI Engine):**
 ```bash
-cd /path/to/deepthinker
+cd "/path/to/Team_Trenches"
 source venv/bin/activate
 
-# Intel Iris Xe iGPU only — skip this on NVIDIA/Mac
+# Intel Iris Xe / Arc iGPU only — skip on NVIDIA or Mac
 export SYCL_DEVICE_FILTER=level_zero
 export IPEX_OPTIMIZE_TRANSFORMERS=1
 
 python backend/app.py
 ```
 
-Wait until you see:
+Wait until you see this before moving to Terminal 2:
 ```
 🧠 DMA: Detected XX GB RAM → Safety threshold = X.X GB
 INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-**Terminal 2 — Frontend:**
+**Terminal 2 — Start the Frontend (Web UI):**
 ```bash
-cd /path/to/deepthinker/frontend
+cd "/path/to/Team_Trenches/frontend"
 npm run dev
 ```
 
+You will see:
+```
+  VITE v8.x.x  ready in 300 ms
+  ➜  Local:   http://localhost:5173/
+```
+
+Open **`http://localhost:5173`** in your browser. ✅
+
 ---
 
-### 🍎 Mac (Apple Silicon M1/M2/M3/M4) — Step by Step
+### 🍎 Mac (Apple Silicon M1/M2/M3/M4)
 
 **Terminal 1 — Backend:**
 ```bash
-cd /path/to/deepthinker
+cd /path/to/Team_Trenches
 source venv/bin/activate
 python backend/app.py
 ```
 
+Wait for: `Uvicorn running on http://127.0.0.1:8000`
+
 **Terminal 2 — Frontend:**
 ```bash
-cd /path/to/deepthinker/frontend
+cd /path/to/Team_Trenches/frontend
 npm run dev
 ```
 
+Open **`http://localhost:5173`** in your browser. ✅
+
 ---
 
-### 🪟 Windows — Step by Step
+### 🪟 Windows (Command Prompt)
 
-**Terminal 1 — Backend (Command Prompt):**
+**Terminal 1 — Backend:**
 ```cmd
-cd C:\path\to\deepthinker
+cd C:\path\to\Team_Trenches
 venv\Scripts\activate
 python backend\app.py
 ```
 
-**Terminal 1 — Backend (PowerShell):**
+**Terminal 2 — Frontend:**
+```cmd
+cd C:\path\to\Team_Trenches\frontend
+npm run dev
+```
+
+Open **`http://localhost:5173`** in your browser. ✅
+
+### 🪟 Windows (PowerShell)
+
+**Terminal 1 — Backend:**
 ```powershell
-cd C:\path\to\deepthinker
+cd C:\path\to\Team_Trenches
 venv\Scripts\Activate.ps1
 python backend\app.py
 ```
 
-**Terminal 2 — Frontend (both CMD and PowerShell):**
-```cmd
-cd C:\path\to\deepthinker\frontend
+**Terminal 2 — Frontend:**
+```powershell
+cd C:\path\to\Team_Trenches\frontend
 npm run dev
 ```
-
----
-
-### Step 3 — Open the UI
-
-Once both terminals show their success messages, open your browser:
-
-```
-http://localhost:5173
-```
-
-Backend API is at `http://127.0.0.1:8000`
 
 ---
 
@@ -131,22 +106,36 @@ Backend API is at `http://127.0.0.1:8000`
 Before running for the first time, download the AI model weights (~18 GB total):
 
 ```bash
-source venv/bin/activate   # Mac / Linux
-# venv\Scripts\activate    # Windows
+source venv/bin/activate       # Linux / Mac
+# venv\Scripts\activate        # Windows
 
-# Check which models are already downloaded
+# Check download status
 python backend/downloader.py
 
-# Download all at once
+# Download all models at once
 python backend/downloader.py router deepseek_r1 vibethinker opencode qwen_vl
 
 # Or download individually
-python backend/downloader.py router          # Phi-3.5 Mini     (~3 GB)
-python backend/downloader.py deepseek_r1    # DeepSeek-R1 7B   (~6 GB)
-python backend/downloader.py vibethinker    # VibeThinker 1.5B (~1.4 GB)
+python backend/downloader.py router          # Phi-3.5 Mini Router     (~3 GB)
+python backend/downloader.py deepseek_r1    # DeepSeek-R1 7B           (~6 GB)
+python backend/downloader.py vibethinker    # VibeThinker 1.5B         (~1.4 GB)
 python backend/downloader.py opencode       # OpenCodeInterpreter 6.7B (~5 GB)
-python backend/downloader.py qwen_vl        # Qwen2.5-VL 7B    (~7 GB)
+python backend/downloader.py qwen_vl        # Qwen2.5-VL 7B Vision     (~7 GB)
 ```
+
+---
+
+## ⏱️ What to Expect on First Run
+
+When you send your **first prompt**, the system does a cold start — it loads the AI models from disk into GPU memory. This is normal:
+
+| Situation | Time |
+|---|---|
+| **First prompt ever** (cold load) | 2–4 minutes |
+| **Subsequent prompts** (models cached) | 5–30 seconds |
+| **After "Offload Memory"** | 2–4 minutes again |
+
+> 💡 **Tip:** Send a simple "hi" as your first message to warm up the Router model. Once you see a response, all other prompts will be fast.
 
 ---
 
@@ -154,62 +143,65 @@ python backend/downloader.py qwen_vl        # Qwen2.5-VL 7B    (~7 GB)
 
 ### ❌ `Address already in use` (Port 8000 or 5173)
 
-A previous server is still running. Kill it first:
+A previous server is still running in the background. Kill it first:
 
 **Linux / Mac:**
 ```bash
 pkill -f "backend/app.py"
 pkill -f "vite"
-sleep 2
+sleep 3
 ```
+
+Then re-run both terminal commands from the top.
 
 **Windows (PowerShell):**
 ```powershell
-# Find and kill port 8000
+# Find PID on port 8000 and kill it
 netstat -ano | findstr :8000
-taskkill /PID <PID_FROM_ABOVE> /F
+taskkill /PID <PID> /F
 
-# Find and kill port 5173
+# Find PID on port 5173 and kill it
 netstat -ano | findstr :5173
-taskkill /PID <PID_FROM_ABOVE> /F
+taskkill /PID <PID> /F
 ```
 
 ---
 
-### ❌ `NetworkError when attempting to fetch resource`
+### ❌ `Cannot reach backend` / `NetworkError`
 
 The frontend cannot reach the backend. Check:
-1. Is the **backend running** in Terminal 1? Look for `Uvicorn running on http://127.0.0.1:8000`
-2. Did the backend **crash**? Check Terminal 1 for error messages
-3. In the UI, go to **Settings** and confirm the API URL is `http://127.0.0.1:8000`
+1. Is Terminal 1 showing `Uvicorn running on http://127.0.0.1:8000`?
+2. Did the backend crash? Look for error messages in Terminal 1.
+3. Is it your **first prompt**? The backend may still be loading models (2–4 min). Wait and try again.
+4. In the UI, click **Settings** and confirm the API URL is `http://127.0.0.1:8000`.
 
 ---
 
 ### ❌ `No module named 'llama_cpp'` or `ModuleNotFoundError`
 
-Virtual environment is not activated or deps not installed:
+Virtual environment not activated or dependencies missing:
 ```bash
-source venv/bin/activate   # Mac / Linux
+source venv/bin/activate    # Linux / Mac
 pip install -r requirements.txt
 ```
 
 ---
 
-### ❌ `Aborted (core dumped)` or `CUDA out of memory` on model load
+### ❌ `Aborted (core dumped)` or GPU crash on model load (Intel iGPU)
 
-The Dynamic Memory Allocator (DMA) handles this automatically by evicting older models. If it still crashes:
-1. Click **"Offload Memory"** in the UI sidebar
-2. Retry the prompt — models load one at a time now
+The Dynamic Memory Allocator (DMA) handles this automatically. If a crash still occurs:
+1. Click **"Offload Memory"** in the UI sidebar to free all loaded models.
+2. Retry your prompt — the DMA loads models one at a time.
 
 ---
 
 ### ❌ Frontend opens on port 5174 instead of 5173
 
-Port 5173 is still occupied. Kill the stale process:
+Port 5173 is occupied by a stale process. Kill it:
 ```bash
 pkill -f "vite"    # Linux / Mac
 ```
-Then re-run `npm run dev`. Or just use `http://localhost:5174` — the UI works on any port.
+Then re-run `npm run dev`. Or just use `http://localhost:5174` — works the same.
 
 ---
 
@@ -224,18 +216,22 @@ Then re-run `npm run dev`. Or just use `http://localhost:5174` — the UI works 
 | **Python** | 3.10 | 3.11 |
 | **Node.js** | 18 | 20 |
 
-> **Intel iGPU (Iris Xe / Arc):** The system uses your system RAM as VRAM via the DMA. 32 GB RAM recommended. Always set `SYCL_DEVICE_FILTER=level_zero` before starting.
+> **Intel iGPU (Iris Xe / Arc):** Uses system RAM as VRAM. 32 GB recommended. Must set `SYCL_DEVICE_FILTER=level_zero` before starting the backend.
 
 ---
 
-## ✅ What to Expect When Running
+## ✅ What Happens When It's Working
 
-Once both servers are up and you submit a prompt, the multi-agent pipeline streams live in the UI:
+Once both servers are up and you submit a prompt, the pipeline streams live in the UI:
 
-1. **Phi-3.5 Router** classifies your prompt → `CODING`, `REASONING`, or `SIMPLE`
-2. **DeepSeek-R1** drafts a step-by-step logic plan
-3. **Reasoning Sandbox** verifies the plan with Python assertions
-4. **VibeThinker** writes the code
-5. **Execution Sandbox** runs the code in a fully isolated environment
-6. **OpenCodeInterpreter** generates an interactive 3D Plotly visualization (if applicable)
+1. **Phi-3.5 Router** classifies: `CODING` / `REASONING` / `SIMPLE`
+2. **DeepSeek-R1** drafts a logic plan or detailed answer
+3. **Reasoning Sandbox** verifies with Python assertions
+4. **VibeThinker** writes and self-corrects the code
+5. **Execution Sandbox** runs code in an isolated environment
+6. **OpenCodeInterpreter** generates an interactive 3D Plotly chart (if applicable)
 7. Final answer streams to the UI with code, output, and visualization
+
+---
+
+> **Note:** `start.sh` is included in the repo as a convenience script for Linux but may be unreliable depending on your system state. The manual two-terminal method above is always reliable and recommended.
