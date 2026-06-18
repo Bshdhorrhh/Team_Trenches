@@ -254,7 +254,7 @@ See the dedicated guides:
 | **Python** | 3.10 | 3.11 |
 | **Node.js** | 18 | 20 |
 
-> **Intel iGPU (Iris Xe / Arc):** Uses system RAM as VRAM via the Level Zero API. 32 GB RAM strongly recommended. Always export `SYCL_DEVICE_FILTER=level_zero` before starting the backend.
+> **Intel iGPU (Iris Xe / Arc):** Uses system RAM as VRAM via the Level Zero API. Works with **16 GB RAM** minimum (using aggressive LRU model swapping), but 32 GB is recommended for maximum speed. Always export `SYCL_DEVICE_FILTER=level_zero` before starting the backend.
 
 ---
 
