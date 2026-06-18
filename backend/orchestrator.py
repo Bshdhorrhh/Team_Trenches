@@ -286,9 +286,20 @@ class AgentOrchestrator:
             if hasattr(model_obj, "n_ctx") and required_ctx > model_obj.n_ctx():
                 print(f"🔄 Reloading '{model_key}' to expand context: {model_obj.n_ctx()} -> {required_ctx}")
                 if hasattr(model_obj, 'close'):
-                    model_obj.close()
+                    try:
+                        model_obj.close()
+                    except Exception:
+                        pass
                 del self.loaded_models[model_key]
                 gc.collect()
+                
+                # Give the iGPU Level Zero driver time to flush the memory before re-allocating
+                import time
+                time.sleep(1.5)
+                
+                # Clear XPU cache if available to prevent segfaults on rapid reload
+                if torch and hasattr(torch, "xpu") and torch.xpu.is_available():
+                    torch.xpu.empty_cache()
             else:
                 self._touch_model(model_key)
                 return model_obj
