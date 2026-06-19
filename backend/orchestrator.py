@@ -137,6 +137,20 @@ class AgentOrchestrator:
                       f"evict threshold = {self.vram_safety_gb:.1f} GB free")
             except Exception:
                 pass
+        # Auto-context ceiling based on available VRAM
+        # P100 (16GB): 4096 ctx  |  A100/H100 (40-80GB): 8192 ctx  |  iGPU/CPU: 8192 (uses RAM)
+        self.max_auto_ctx = 8192
+        if torch and torch.cuda.is_available():
+            try:
+                _free, total_vram = torch.cuda.mem_get_info(0)
+                total_vram_gb = total_vram / (1024 ** 3)
+                if total_vram_gb <= 16:
+                    self.max_auto_ctx = 4096
+                elif total_vram_gb <= 24:
+                    self.max_auto_ctx = 6144
+                print(f"📐 DMA: Auto-context ceiling = {self.max_auto_ctx} tokens (based on {total_vram_gb:.0f} GB VRAM)")
+            except Exception:
+                pass
         print(f"🧠 DMA: Detected {self.total_ram_gb:.0f} GB RAM → "
               f"Safety threshold = {self.ram_safety_gb:.1f} GB "
               f"(evict when free < {self.ram_safety_gb:.1f} GB)")
@@ -664,18 +678,19 @@ class AgentOrchestrator:
             if web_context else prompt
         )
 
-        # ── Dynamic Context Sizing ───────────────────────────────────────
+        # ── Dynamic Context Sizing (VRAM-aware) ────────────────────────
         est_tokens = len(enriched_prompt) // 4
+        ctx_cap = self.max_auto_ctx  # VRAM-safe ceiling (4096 on P100, 8192 on larger GPUs)
         if self.context_length == 0:
-            router_ctx = min(128000, est_tokens + self.max_tokens)
-            ds_ctx = min(128000, est_tokens + self.max_tokens)
-            oc_ctx = 8192
+            router_ctx = min(ctx_cap, est_tokens + self.max_tokens)
+            ds_ctx = min(ctx_cap, est_tokens + self.max_tokens)
+            oc_ctx = min(ctx_cap, 4096)
         else:
-            router_ctx = self.context_length
-            ds_ctx = self.context_length
-            oc_ctx = min(8192, self.context_length)
+            router_ctx = min(self.context_length, ctx_cap)
+            ds_ctx = min(self.context_length, ctx_cap)
+            oc_ctx = min(4096, self.context_length, ctx_cap)
 
-        gen_tokens = 8192
+        gen_tokens = min(ctx_cap, 4096)
         gen_temp = 0.1
 
         # ── Three-Way Classification ─────────────────────────────────────
