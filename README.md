@@ -32,7 +32,7 @@ Most "local AI" projects run a single model and call it agentic. DeepThinker run
 | Number of models | 5 (routed) | 1 |
 | Code execution | ✅ Isolated polyglot sandbox | ❌ |
 | Self-correction | ✅ Reflexion + Nuclear Reset | ❌ |
-| 3D Visualization | ✅ Live Plotly rendering | ❌ |
+| UI Artifacts | ✅ Claude-style Frontend Sandboxing | ❌ |
 | Memory / RAG | ✅ ChromaDB + SQLite | ❌ |
 | Hardware | Intel iGPU / NVIDIA / Mac M-series | Usually NVIDIA only |
 | Cloud dependency | ❌ 100% local | Often cloud-backed |
@@ -181,13 +181,13 @@ The pipeline has two distinct sandboxes that run at different stages:
 
 ---
 
-### 4 — Interactive 3D Visualization Engine
+### 4 — Claude-Style UI Artifacts & 3D Visualization
 After every `CODING` or `REASONING` response, a **3D Gate Check** runs automatically:
 - The Router decides if the task involves mathematical graphing, physics equations, or data plots
-- If yes, **OpenCodeInterpreter** generates a complete Plotly 3D visualization script
-- The script is executed in the sandbox, and the resulting JSON is sent to the React frontend
-- The frontend renders it as a fully **interactive 3D chart** (zoom, rotate, hover) inside the chat
-- If the visualization script fails, the Reflexion loop auto-fixes it before returning the chart
+- If yes, **OpenCodeInterpreter** generates a complete, self-contained **HTML/JS Artifact** using Plotly.js
+- The artifact is sent to the React frontend, which renders it inside a **secure, isolated iframe sandbox** — exactly like Anthropic's Claude Artifacts
+- The UI features a premium glassmorphic artifact window with expand-to-fullscreen and open-in-new-tab capabilities
+- **Dual-Mode Fallback:** If the AI hallucinates invalid HTML, the backend automatically falls back to generating a Python Plotly script, executing it in the backend Sandbox, and streaming the raw JSON to the frontend
 
 ---
 
