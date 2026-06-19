@@ -32,3 +32,20 @@ backend/outputs/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Runtime databases & logs (generated at runtime, never commit)
+forge_memory_db/
+*.db
+*.sqlite3
+*.log
+crash_log.txt
+server_logs.txt
+
+# Scratch test files & embedded repos
+test_*.py
+agentic_benchmark_prompt.txt
+BitNet/
+*.md
+!README.md
+!README_SETUP.md
+!STARTUP.md
