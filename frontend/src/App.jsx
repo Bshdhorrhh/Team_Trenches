@@ -147,7 +147,7 @@ const ArtifactSandbox = ({ htmlCode }) => {
           <iframe
             ref={iframeRef}
             src={blobUrl.current}
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             title="AI Artifact"
             className="artifact-iframe"
           />
