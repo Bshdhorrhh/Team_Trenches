@@ -830,7 +830,7 @@ class AgentOrchestrator:
             if ok:
                 self.memory.save(prompt, code)
                 router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                    viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                 return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 5: Shallow Fix (VibeThinker) ───────────────────────
@@ -845,7 +845,7 @@ class AgentOrchestrator:
                 self.memory.save(prompt, code)
                 self.memory.save_mistake(prompt, failed_code, failed_error, code)
                 router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                    viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                 return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 6: Deep Escalation (VibeThinker — stronger prompt) ─
@@ -942,7 +942,7 @@ class AgentOrchestrator:
 
             # Exhausted playground rounds — return best effort
             router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                    viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+            viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             return f"### Answer (Best Effort)\n{ds_answer}{viz}"
 
         else:
