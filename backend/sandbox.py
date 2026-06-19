@@ -539,14 +539,15 @@ class Sandbox:
     def extract_code(text):
         """
         Extract code from markdown code blocks in LLM responses.
-        Returns (code, language) tuple. Handles ```python, ```c, ```cpp, ```bash, etc.
+        Handles both closed and unclosed (cut-off) blocks.
         """
         def _sanitize(code_str):
             # Remove hallucinated Jupyter magic commands that cause SyntaxErrors in pure Python
             return re.sub(r'^[!%]\s*pip\s+install.*$', '', code_str, flags=re.MULTILINE).strip()
 
-        # Try language-specific code blocks first
+        # 1. Try language-specific closed code blocks first
         lang_patterns = [
+            (r"```html\s*(.*?)\s*```", 'html'),
             (r"```python\s*(.*?)\s*```", 'python'),
             (r"```py\s*(.*?)\s*```", 'python'),
             (r"```c\+\+\s*(.*?)\s*```", 'cpp'),
@@ -564,12 +565,42 @@ class Sandbox:
             if match:
                 return _sanitize(match.group(1))
 
-        # Fallback: Match generic ``` <code> ```
+        # 2. Fallback: Match generic closed ``` <code> ```
         generic_match = re.search(r"```\s*(.*?)\s*```", text, re.DOTALL)
         if generic_match:
             content = generic_match.group(1).strip()
             first_line = content.split('\n')[0].strip().lower()
-            known_tags = ['python', 'py', 'javascript', 'js', 'html', 'css', 'bash', 'sh', 'c', 'cpp', 'c++', 'java']
+            known_tags = ['html', 'python', 'py', 'javascript', 'js', 'css', 'bash', 'sh', 'c', 'cpp', 'c++', 'java']
+            if first_line in known_tags:
+                return _sanitize("\n".join(content.split('\n')[1:]))
+            return _sanitize(content)
+
+        # 3. Match unclosed language-specific code blocks (cut off at response end)
+        unclosed_patterns = [
+            (r"```html\s*(.*)$", 'html'),
+            (r"```python\s*(.*)$", 'python'),
+            (r"```py\s*(.*)$", 'python'),
+            (r"```javascript\s*(.*)$", 'javascript'),
+            (r"```js\s*(.*)$", 'javascript'),
+            (r"```c\+\+\s*(.*)$", 'cpp'),
+            (r"```cpp\s*(.*)$", 'cpp'),
+            (r"```c\s*(.*)$", 'c'),
+            (r"```bash\s*(.*)$", 'bash'),
+            (r"```sh\s*(.*)$", 'bash'),
+            (r"```java\s*(.*)$", 'java'),
+        ]
+
+        for pattern, lang in unclosed_patterns:
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            if match:
+                return _sanitize(match.group(1))
+
+        # 4. Match generic unclosed block
+        generic_unclosed = re.search(r"```\s*(.*)$", text, re.DOTALL)
+        if generic_unclosed:
+            content = generic_unclosed.group(1).strip()
+            first_line = content.split('\n')[0].strip().lower()
+            known_tags = ['html', 'python', 'py', 'javascript', 'js', 'css', 'bash', 'sh', 'c', 'cpp', 'c++', 'java']
             if first_line in known_tags:
                 return _sanitize("\n".join(content.split('\n')[1:]))
             return _sanitize(content)
