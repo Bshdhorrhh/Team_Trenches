@@ -640,7 +640,7 @@ class AgentOrchestrator:
         lessons = self._call_model(critic_llm, p, max_tokens=512, temperature=0.3)
         return self._strip_thinking(lessons)
 
-    def _check_3d_gate(self, prompt, compiled_plan, router_llm, coder_llm, gen_tokens, gen_temp, status_callback=None):
+    def _check_3d_gate(self, prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
         """Check if the task needs 3D visualization and generate it if so."""
         if status_callback:
             status_callback("Checking 3D Visualization Eligibility...", "info", "router", 90)
@@ -650,6 +650,7 @@ class AgentOrchestrator:
             "Reply ONLY 'YES' or 'NO'.\n\n"
             f"Query: {prompt[:500]}"
         )
+        router_llm = self._get_model("router", required_ctx=router_ctx)
         is_3d = self._call_model(router_llm, gate_prompt, max_tokens=10, temperature=0.1)
 
         if "YES" not in str(is_3d).upper():
@@ -671,6 +672,7 @@ class AgentOrchestrator:
             "Output ONLY code in ```python``` blocks.\n\n"
             f"Topic: {compiled_plan[:3000]}"
         )
+        coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
         viz_code = self._call_model(coder_llm, viz_prompt, max_tokens=gen_tokens, temperature=gen_temp)
         viz_extract = Sandbox.extract_code(viz_code)
 
@@ -827,8 +829,8 @@ class AgentOrchestrator:
             ok, output = self.sandbox.execute(code)
             if ok:
                 self.memory.save(prompt, code)
-                coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-                viz = self._check_3d_gate(prompt, compiled_plan, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+                router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                 return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 5: Shallow Fix (VibeThinker) ───────────────────────
@@ -842,8 +844,8 @@ class AgentOrchestrator:
             if ok:
                 self.memory.save(prompt, code)
                 self.memory.save_mistake(prompt, failed_code, failed_error, code)
-                coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-                viz = self._check_3d_gate(prompt, compiled_plan, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+                router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                 return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 6: Deep Escalation (VibeThinker — stronger prompt) ─
@@ -861,8 +863,8 @@ class AgentOrchestrator:
                 if ok:
                     self.memory.save(prompt, code)
                     self.memory.save_mistake(prompt, failed_code, failed_error, code)
-                    coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-                    viz = self._check_3d_gate(prompt, compiled_plan, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+                    router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                     return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 7: Nuclear Reset ───────────────────────────────────
@@ -916,8 +918,8 @@ class AgentOrchestrator:
                 if verified:
                     if status_callback:
                         status_callback("Reasoning VERIFIED!", "success", "deepseek_r1", 80)
-                    coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-                    viz = self._check_3d_gate(prompt, ds_answer, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+                    router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                     return f"### Verified Answer\n{ds_answer}{viz}"
 
                 # VibeThinker tries to fix
@@ -933,14 +935,14 @@ class AgentOrchestrator:
                 if v2:
                     if status_callback:
                         status_callback("VibeThinker's correction VERIFIED!", "success", "vibethinker", 80)
-                    coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-                    viz = self._check_3d_gate(prompt, vibe_answer, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+                    router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                     return f"### Verified Answer\n{vibe_answer}{viz}"
                 ds_safe = f"{ds_safe}\n\nPrevious errors: {pg_out[:500]}"
 
             # Exhausted playground rounds — return best effort
-            coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-            viz = self._check_3d_gate(prompt, ds_answer, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+            router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                    viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             return f"### Answer (Best Effort)\n{ds_answer}{viz}"
 
         else:
@@ -957,8 +959,8 @@ class AgentOrchestrator:
             ))
 
             compiled = f"{ds_draft}\n\nRefinements:\n{vibe_critique}"
-            coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-            viz = self._check_3d_gate(prompt, compiled, router_llm, coder_llm, gen_tokens, gen_temp, status_callback)
+            router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+            viz = self._check_3d_gate(prompt, compiled, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             if status_callback:
                 status_callback("Done!", "success", "router", 100)
             return f"### Analysis\n{compiled}{viz}"
