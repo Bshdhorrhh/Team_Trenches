@@ -65,7 +65,7 @@ const ArtifactSandbox = ({ htmlCode }) => {
       // Bulletproof dark mode and Error Catcher injection
       let injectedHtml = htmlCode;
       if (!injectedHtml.includes("window.onerror")) {
-        injectedHtml = injectedHtml.replace("</head>", `
+        const injection = `
           <style>
             body { background-color: #0d0d0d !important; color: #e0e0e0 !important; margin: 0; padding: 0; font-family: monospace; }
             #chart, .js-plotly-plot { background-color: transparent !important; }
@@ -81,7 +81,17 @@ const ArtifactSandbox = ({ htmlCode }) => {
               return false;
             };
           </script>
-        </head>`);
+        `;
+        const lowerHtml = injectedHtml.toLowerCase();
+        if (lowerHtml.includes("</head>")) {
+          const index = lowerHtml.indexOf("</head>");
+          injectedHtml = injectedHtml.substring(0, index) + injection + injectedHtml.substring(index);
+        } else if (lowerHtml.includes("<body>")) {
+          const index = lowerHtml.indexOf("<body>");
+          injectedHtml = injectedHtml.substring(0, index + 6) + injection + injectedHtml.substring(index + 6);
+        } else {
+          injectedHtml = injection + injectedHtml;
+        }
       }
       
       const blob = new Blob([injectedHtml], { type: "text/html" });
