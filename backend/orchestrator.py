@@ -271,10 +271,10 @@ class AgentOrchestrator:
                 vram_free = self._get_vram_free_gb(gpu_idx)
                 if vram_free is None:
                     continue
-                # Use the larger of: static safety threshold OR (incoming model + 2GB buffer)
+                # Use the larger of: static safety threshold OR (incoming model + 3GB buffer)
                 effective_threshold = self.vram_safety_gb
                 if required_vram_gb is not None:
-                    effective_threshold = max(self.vram_safety_gb, required_vram_gb + 2.0)
+                    effective_threshold = max(self.vram_safety_gb, required_vram_gb + 3.0)
                 if vram_free < effective_threshold:
                     print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free, need {effective_threshold:.1f} GB)")
                     while vram_free < effective_threshold and self.model_access_order:
@@ -288,7 +288,7 @@ class AgentOrchestrator:
         for free_gb, total_gb, card_name in sysfs_gpus:
             effective_threshold = self.vram_safety_gb
             if required_vram_gb is not None:
-                effective_threshold = max(self.vram_safety_gb, required_vram_gb + 2.0)
+                effective_threshold = max(self.vram_safety_gb, required_vram_gb + 3.0)
             if free_gb < effective_threshold:
                 print(f"⚠️ DMA: sysfs {card_name} VRAM low ({free_gb:.1f}/{total_gb:.1f} GB free)")
                 while free_gb < effective_threshold and self.model_access_order:
