@@ -27,10 +27,13 @@ class TransformerWrapper:
         self.device = device
         self.cancel_event = cancel_event  # threading.Event set by /api/cancel
 
-    def __call__(self, prompt, max_tokens=512, temperature=0.7):
+    def __call__(self, prompt, max_tokens=512, temperature=0.7, system_prompt=None):
         if isinstance(prompt, str):
             # Convert raw strings into proper conversational format so the model doesn't hallucinate
-            messages = [{"role": "user", "content": prompt}]
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
             prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
@@ -521,22 +524,29 @@ class AgentOrchestrator:
     # =========================================================================
     # DRY Helper: Call any model (TransformerWrapper or GGUF)
     # =========================================================================
-    def _call_model(self, llm, prompt, max_tokens=512, temperature=0.7):
+    def _call_model(self, llm, prompt, max_tokens=512, temperature=0.7, system_prompt=None):
         if isinstance(llm, TransformerWrapper):
-            return llm(prompt, max_tokens=max_tokens, temperature=temperature)
+            return llm(prompt, max_tokens=max_tokens, temperature=temperature, system_prompt=system_prompt)
             
         # Context overflow protection for llama-cpp-python
         if hasattr(llm, "n_ctx"):
             # Estimate tokens: ~4 chars per token + ~50 token buffer
             est_prompt_tokens = len(prompt) // 4 + 50
+            if system_prompt:
+                est_prompt_tokens += len(system_prompt) // 4
             # Ensure we never request more tokens than the available space
             safe_max = llm.n_ctx() - est_prompt_tokens
             if safe_max < 10:
                 safe_max = 10 # Desperate fallback
             max_tokens = min(max_tokens, safe_max)
 
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         return llm.create_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens, temperature=temperature
         )['choices'][0]['message']['content']
 
@@ -779,7 +789,17 @@ class AgentOrchestrator:
             "8. Output the COMPLETE HTML page inside ```html``` blocks.\n\n"
             f"Topic: {compiled_plan[:3000]}"
         )
-        html_code = self._call_model(coder_llm, html_prompt, max_tokens=gen_tokens, temperature=gen_temp)
+        html_code = self._call_model(
+            coder_llm, 
+            html_prompt, 
+            max_tokens=gen_tokens, 
+            temperature=gen_temp,
+            system_prompt=(
+                "You are an expert coder. Writing and generating complete, self-contained HTML/JS files "
+                "with inline CSS and JavaScript logic (such as Three.js or Plotly.js) is FULLY supported and expected. "
+                "Do NOT refuse this request. Output only the complete HTML page inside ```html``` code blocks."
+            )
+        )
         html_extract = Sandbox.extract_code(html_code)
 
         # Validate initially
@@ -805,7 +825,17 @@ class AgentOrchestrator:
                 "3. Ensure there are no JavaScript syntax errors or undefined variables.\n\n"
                 "Output ONLY the complete, corrected HTML page inside ```html``` blocks."
             )
-            html_fixed = self._call_model(coder_llm, fix_p, max_tokens=gen_tokens, temperature=gen_temp)
+            html_fixed = self._call_model(
+                coder_llm, 
+                fix_p, 
+                max_tokens=gen_tokens, 
+                temperature=gen_temp,
+                system_prompt=(
+                    "You are an expert coder. Writing and fixing complete, self-contained HTML/JS files "
+                    "with inline CSS and JavaScript logic (such as Three.js or Plotly.js) is FULLY supported and expected. "
+                    "Do NOT refuse this request. Output only the complete HTML page inside ```html``` code blocks."
+                )
+            )
             fixed_extract = Sandbox.extract_code(html_fixed)
             if fixed_extract:
                 html_extract = fixed_extract
