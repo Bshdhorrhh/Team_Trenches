@@ -755,19 +755,19 @@ class AgentOrchestrator:
         # ══════════════════════════════════════════════════════════════════
         if task_type == "CODING":
             return self._coding_pipeline(prompt, enriched_prompt, router_llm,
-                                         ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                                         router_ctx, ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
 
         # ══════════════════════════════════════════════════════════════════
         # PATH C: REASONING — Playground-Verified or LLM Debate
         # ══════════════════════════════════════════════════════════════════
         return self._reasoning_pipeline(prompt, enriched_prompt, router_llm,
-                                        ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                                        router_ctx, ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
 
     # =====================================================================
     # CODING PIPELINE — Reasoning Sandbox → Code Sandbox → Reflexion
     # =====================================================================
     def _coding_pipeline(self, prompt, enriched_prompt, router_llm,
-                         ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
+                         router_ctx, ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
         ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback)
 
         # ── Retrieve relevant past experiences from Memory/RAG ────────────
@@ -883,7 +883,7 @@ class AgentOrchestrator:
     # REASONING PIPELINE — Playground-Verified or LLM Debate
     # =====================================================================
     def _reasoning_pipeline(self, prompt, enriched_prompt, router_llm,
-                            ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
+                            router_ctx, ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
         ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback)
 
         # ── Retrieve relevant past experiences from Memory/RAG ────────────
