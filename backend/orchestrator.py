@@ -72,6 +72,9 @@ class TransformerWrapper:
                     stopping_criteria=stopping_criteria
                 )
         
+        if self.cancel_event and self.cancel_event.is_set():
+            raise RuntimeError("Generation cancelled by user.")
+            
         return self.tokenizer.decode(
             outputs[0][inputs.input_ids.shape[1]:],
             skip_special_tokens=True
@@ -525,6 +528,9 @@ class AgentOrchestrator:
     # DRY Helper: Call any model (TransformerWrapper or GGUF)
     # =========================================================================
     def _call_model(self, llm, prompt, max_tokens=512, temperature=0.7, system_prompt=None):
+        if self.cancel_event and self.cancel_event.is_set():
+            raise RuntimeError("Generation cancelled by user.")
+
         if isinstance(llm, TransformerWrapper):
             return llm(prompt, max_tokens=max_tokens, temperature=temperature, system_prompt=system_prompt)
             
@@ -545,10 +551,27 @@ class AgentOrchestrator:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        return llm.create_chat_completion(
+        # Use streaming to support instant cancellation for GGUF/llama-cpp-python models
+        chunks = llm.create_chat_completion(
             messages=messages,
-            max_tokens=max_tokens, temperature=temperature
-        )['choices'][0]['message']['content']
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True
+        )
+        
+        content_pieces = []
+        for chunk in chunks:
+            if self.cancel_event and self.cancel_event.is_set():
+                raise RuntimeError("Generation cancelled by user.")
+            
+            choices = chunk.get('choices', [])
+            if choices:
+                delta = choices[0].get('delta', {})
+                content = delta.get('content', '')
+                if content:
+                    content_pieces.append(content)
+                    
+        return "".join(content_pieces)
 
     # =========================================================================
     # DYNAMIC ACTOR-CRITIC VERIFIER PIPELINE — Helper Methods
