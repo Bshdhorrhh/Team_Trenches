@@ -1,8 +1,25 @@
+<div align="center">
+  
 # 🧠 DeepThinker Multi-Agent Hub
 
-> **India Agentic AI Open Hackathon 2026 — Team Trenches**
+### A Local Multi-Agent Pipeline with Dual Sandbox Verification
 
-A production-grade, fully local multi-agent AI system that runs **five heavyweight LLMs simultaneously** on consumer hardware — including Intel Iris Xe integrated GPUs. DeepThinker routes every query through a dynamic pipeline of specialized agents that reason, verify, code, fix, and visualize — all without a single API call to the cloud.
+*Running an orchestrated fleet of 5 heavyweight LLMs simultaneously on consumer hardware*
+
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)
+![React](https://img.shields.io/badge/React-18.0%2B-blue)
+![License AGPL 3.0](https://img.shields.io/badge/License-AGPL%203.0-green)
+![Architecture Multi-Agent MoE](https://img.shields.io/badge/Architecture-Multi--Agent%20MoE-purple)
+
+</div>
+
+---
+
+DeepThinker is a production-grade, fully local multi-agent AI system that runs **five heavyweight LLMs simultaneously** on consumer hardware — including Intel Iris Xe integrated GPUs. It routes every query through a dynamic pipeline of specialized agents that reason, verify, code, fix, and visualize — all without a single API call to the cloud.
+
+> [!CAUTION]
+> ### ⚠️ Experimental Status
+> This project was developed as a submission for the **India Agentic AI Open Hackathon 2026**. The dual-sandbox architecture, Reflexion loops, and Dynamic Memory Allocator (DMA) push consumer hardware to its absolute limits. 
 
 ---
 
