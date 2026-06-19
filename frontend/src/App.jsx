@@ -49,17 +49,94 @@ const PlotlyChart = ({ jsonStr }) => {
 };
 
 /* ═══════════════════════════════════════════════════
-   MARKDOWN RENDERER (with Plotly support)
+   ARTIFACT SANDBOX (Claude-style iframe renderer)
+   Renders AI-generated HTML/JS in a secure iframe
+   ═══════════════════════════════════════════════════ */
+const ArtifactSandbox = ({ htmlCode }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const iframeRef = useRef(null);
+
+  // Build a blob URL from the HTML code for secure sandboxed rendering
+  const blobUrl = useRef(null);
+  useEffect(() => {
+    if (!htmlCode) return;
+    try {
+      const blob = new Blob([htmlCode], { type: "text/html" });
+      blobUrl.current = URL.createObjectURL(blob);
+      setHasError(false);
+    } catch (err) {
+      console.error("Artifact blob error:", err);
+      setHasError(true);
+    }
+    return () => {
+      if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    };
+  }, [htmlCode]);
+
+  if (hasError || !htmlCode) {
+    return (
+      <div className="artifact-error">
+        <span>⚠️</span> Failed to render artifact
+      </div>
+    );
+  }
+
+  return (
+    <div className={`artifact-container ${isExpanded ? "expanded" : ""}`}>
+      <div className="artifact-header">
+        <div className="artifact-header-left">
+          <div className="artifact-dot" />
+          <span className="artifact-label">Live Artifact</span>
+          <span className="artifact-badge">HTML/JS</span>
+        </div>
+        <div className="artifact-header-right">
+          <button
+            className="artifact-btn"
+            onClick={() => {
+              const w = window.open("", "_blank");
+              if (w) { w.document.write(htmlCode); w.document.close(); }
+            }}
+            title="Open in new tab"
+          >
+            ↗
+          </button>
+          <button
+            className="artifact-btn"
+            onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? "Collapse" : "Expand"}
+          >
+            {isExpanded ? "⊖" : "⊕"}
+          </button>
+        </div>
+      </div>
+      <div className="artifact-iframe-wrap">
+        {blobUrl.current && (
+          <iframe
+            ref={iframeRef}
+            src={blobUrl.current}
+            sandbox="allow-scripts"
+            title="AI Artifact"
+            className="artifact-iframe"
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
+   MARKDOWN RENDERER (with Plotly + Artifact support)
    ═══════════════════════════════════════════════════ */
 const MessageRenderer = ({ text }) => {
   if (!text) return null;
 
-  // Split on Plotly JSON blocks first
-  const plotlyParts = text.split(/(<!--PLOTLY_JSON-->[\s\S]*?<!--\/PLOTLY_JSON-->)/g);
+  // Split on both Plotly JSON blocks and HTML Artifact blocks
+  const specialParts = text.split(/(<!--PLOTLY_JSON-->[\s\S]*?<!--\/PLOTLY_JSON-->|<!--ARTIFACT_HTML-->[\s\S]*?<!--\/ARTIFACT_HTML-->)/g);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-      {plotlyParts.map((segment, si) => {
+      {specialParts.map((segment, si) => {
         // Render Plotly chart if this segment is a PLOTLY_JSON block
         if (segment.startsWith("<!--PLOTLY_JSON-->")) {
           const jsonStr = segment
@@ -67,6 +144,15 @@ const MessageRenderer = ({ text }) => {
             .replace("<!--/PLOTLY_JSON-->", "")
             .trim();
           return <PlotlyChart key={`plotly-${si}`} jsonStr={jsonStr} />;
+        }
+
+        // Render HTML Artifact in secure iframe sandbox
+        if (segment.startsWith("<!--ARTIFACT_HTML-->")) {
+          const htmlCode = segment
+            .replace("<!--ARTIFACT_HTML-->", "")
+            .replace("<!--/ARTIFACT_HTML-->", "")
+            .trim();
+          return <ArtifactSandbox key={`artifact-${si}`} htmlCode={htmlCode} />;
         }
 
         // Otherwise render as markdown with code blocks
