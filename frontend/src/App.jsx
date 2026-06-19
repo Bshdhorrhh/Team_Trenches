@@ -411,6 +411,15 @@ export default function App() {
           }
           return prev;
         });
+      } else {
+        // Stream closed with NO text at all — backend likely crashed (GPU OOM)
+        setHistory(prev => {
+          const last = prev[prev.length - 1];
+          if (!last || last.type !== "ai") {
+            return [...prev, { type: "ai", text: "⚠️ **Backend crashed during generation** (likely GPU out-of-memory).\n\nThe server process died before it could send a response. Please:\n1. Check the Kaggle notebook for error logs\n2. Restart Cell 2 to relaunch the server\n3. Try a simpler prompt first to warm up the models" }];
+          }
+          return prev;
+        });
       }
 
     } catch (err) {

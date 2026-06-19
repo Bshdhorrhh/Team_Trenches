@@ -235,8 +235,25 @@ class AgentOrchestrator:
         print(f"  ✅ Evicted '{lru_key}'. RAM now: {self._get_ram_free_gb():.1f} GB free")
         return True
 
-    def _check_memory_pressure(self):
-        """LRU-based eviction loop. Evicts models one-by-one until safe."""
+    def _estimate_model_size_gb(self, model_key):
+        """Estimate model size in GB from the GGUF file on disk."""
+        try:
+            model_path = get_model_path(model_key)
+            if model_path and os.path.exists(model_path):
+                return os.path.getsize(model_path) / (1024 ** 3)
+        except Exception:
+            pass
+        # Fallback estimates based on known model sizes
+        size_map = {"router": 3.0, "deepseek_r1": 6.0, "vibethinker": 1.4,
+                    "opencode": 5.2, "qwen_vl": 6.5}
+        return size_map.get(model_key, 5.0)
+
+    def _check_memory_pressure(self, required_vram_gb=None):
+        """LRU-based eviction loop. Evicts models one-by-one until safe.
+        
+        If required_vram_gb is provided, evicts until free VRAM >= required_vram_gb + 2 GB buffer.
+        Otherwise falls back to the static safety threshold.
+        """
         evicted_any = False
 
         # ── System RAM Check ─────────────────────────────────────────────
@@ -252,9 +269,15 @@ class AgentOrchestrator:
         if torch and torch.cuda.is_available():
             for gpu_idx in range(torch.cuda.device_count()):
                 vram_free = self._get_vram_free_gb(gpu_idx)
-                if vram_free is not None and vram_free < self.vram_safety_gb:
-                    print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free)")
-                    while vram_free < self.vram_safety_gb and self.model_access_order:
+                if vram_free is None:
+                    continue
+                # Use the larger of: static safety threshold OR (incoming model + 2GB buffer)
+                effective_threshold = self.vram_safety_gb
+                if required_vram_gb is not None:
+                    effective_threshold = max(self.vram_safety_gb, required_vram_gb + 2.0)
+                if vram_free < effective_threshold:
+                    print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free, need {effective_threshold:.1f} GB)")
+                    while vram_free < effective_threshold and self.model_access_order:
                         if not self._evict_lru_model():
                             break
                         evicted_any = True
@@ -263,9 +286,12 @@ class AgentOrchestrator:
         # ── Linux sysfs VRAM Check (AMD/Intel Vulkan — no ROCm needed) ──
         sysfs_gpus = self._get_sysfs_gpu_vram()
         for free_gb, total_gb, card_name in sysfs_gpus:
-            if free_gb < self.vram_safety_gb:
+            effective_threshold = self.vram_safety_gb
+            if required_vram_gb is not None:
+                effective_threshold = max(self.vram_safety_gb, required_vram_gb + 2.0)
+            if free_gb < effective_threshold:
                 print(f"⚠️ DMA: sysfs {card_name} VRAM low ({free_gb:.1f}/{total_gb:.1f} GB free)")
-                while free_gb < self.vram_safety_gb and self.model_access_order:
+                while free_gb < effective_threshold and self.model_access_order:
                     if not self._evict_lru_model():
                         break
                     evicted_any = True
@@ -328,7 +354,10 @@ class AgentOrchestrator:
                 return model_obj
 
         # DMA Check: evict if memory is low BEFORE attempting a new load
-        self._check_memory_pressure()
+        # Pass the estimated model size so the DMA evicts enough room for THIS specific model
+        est_model_gb = self._estimate_model_size_gb(model_key)
+        print(f"📦 DMA: Preparing to load '{model_key}' (~{est_model_gb:.1f} GB)")
+        self._check_memory_pressure(required_vram_gb=est_model_gb)
 
         # ── iGPU Unified Memory Guard ─────────────────────────────────────
         # On Intel Iris Xe (and similar iGPUs), RAM IS VRAM. Loading two 7B
