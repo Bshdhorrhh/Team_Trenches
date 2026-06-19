@@ -524,6 +524,17 @@ class AgentOrchestrator:
     def _call_model(self, llm, prompt, max_tokens=512, temperature=0.7):
         if isinstance(llm, TransformerWrapper):
             return llm(prompt, max_tokens=max_tokens, temperature=temperature)
+            
+        # Context overflow protection for llama-cpp-python
+        if hasattr(llm, "n_ctx"):
+            # Estimate tokens: ~4 chars per token + ~50 token buffer
+            est_prompt_tokens = len(prompt) // 4 + 50
+            # Ensure we never request more tokens than the available space
+            safe_max = llm.n_ctx() - est_prompt_tokens
+            if safe_max < 10:
+                safe_max = 10 # Desperate fallback
+            max_tokens = min(max_tokens, safe_max)
+
         return llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens, temperature=temperature
