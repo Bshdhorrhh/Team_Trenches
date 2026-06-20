@@ -559,14 +559,32 @@ class AgentOrchestrator:
             
         # Context overflow protection for llama-cpp-python
         if hasattr(llm, "n_ctx"):
-            # Estimate tokens: ~4 chars per token + ~50 token buffer
-            est_prompt_tokens = len(prompt) // 4 + 50
+            ctx = llm.n_ctx()
+            # Chat template overhead: role markers, BOS/EOS tokens (~100 tokens)
+            template_overhead = 100
+            # Estimate prompt tokens: ~3.5 chars per token (conservative)
+            est_prompt_tokens = len(prompt) // 3 + template_overhead
             if system_prompt:
-                est_prompt_tokens += len(system_prompt) // 4
+                est_prompt_tokens += len(system_prompt) // 3
+            
+            # If prompt alone would overflow, truncate it to fit
+            max_prompt_chars = (ctx - max_tokens - template_overhead) * 3
+            if system_prompt:
+                max_prompt_chars -= len(system_prompt)
+            if max_prompt_chars < 300:
+                max_prompt_chars = 300
+            if len(prompt) > max_prompt_chars:
+                # Keep beginning and end of prompt (most important parts)
+                half = max_prompt_chars // 2
+                prompt = prompt[:half] + "\n...[TRUNCATED FOR CONTEXT LIMIT]...\n" + prompt[-half:]
+                est_prompt_tokens = len(prompt) // 3 + template_overhead
+                if system_prompt:
+                    est_prompt_tokens += len(system_prompt) // 3
+            
             # Ensure we never request more tokens than the available space
-            safe_max = llm.n_ctx() - est_prompt_tokens
-            if safe_max < 10:
-                safe_max = 10 # Desperate fallback
+            safe_max = ctx - est_prompt_tokens
+            if safe_max < 64:
+                safe_max = 64  # Desperate fallback — at least try to get something
             max_tokens = min(max_tokens, safe_max)
 
         messages = []
@@ -1117,7 +1135,9 @@ class AgentOrchestrator:
             ds_ctx = min(self.context_length, ctx_cap)
             oc_ctx = min(4096, self.context_length, ctx_cap)
 
-        gen_tokens = min(ctx_cap, 4096)
+        # gen_tokens must leave room for the prompt inside the context window
+        # Use at most half the context for generation, capped at 4096
+        gen_tokens = min(ds_ctx // 2, 4096)
         gen_temp = 0.1
 
         # ── Three-Way Classification ─────────────────────────────────────
@@ -1195,7 +1215,11 @@ class AgentOrchestrator:
             ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
             plan_p = f"Create a step-by-step logic plan:\n{ds_safe}"
             if lessons:
-                plan_p += f"\n\nLESSONS FROM PREVIOUS FAILURES:\n{lessons}"
+                plan_p += f"\n\nLESSONS FROM PREVIOUS FAILURES:\n{lessons[:800]}"
+            # Safety: truncate prompt to leave room for generation
+            max_plan_prompt_chars = (ds_ctx - gen_tokens - 200) * 3
+            if len(plan_p) > max_plan_prompt_chars > 300:
+                plan_p = plan_p[:max_plan_prompt_chars]
             ds_draft = self._strip_thinking(self._call_model(ds_llm, plan_p, gen_tokens, gen_temp, system_prompt=planner_sys))
 
             # ── Phase 2: Reasoning Sandbox — Verify Logic ────────────────
@@ -1227,7 +1251,10 @@ class AgentOrchestrator:
             if status_callback:
                 status_callback("VibeThinker writing code...", "info", "vibethinker", 50)
             vibe_llm = self._get_model("vibethinker", required_ctx=ds_ctx)
-            code_p = f"Write a complete Python script for this plan:\n{compiled_plan}\n\nWrap in ```python```."
+            # Truncate compiled_plan to fit context
+            max_code_prompt_chars = (ds_ctx - gen_tokens - 200) * 3
+            plan_for_code = compiled_plan[:max(max_code_prompt_chars, 1500)] if len(compiled_plan) > max_code_prompt_chars else compiled_plan
+            code_p = f"Write a complete Python script for this plan:\n{plan_for_code}\n\nWrap in ```python```."
             code = Sandbox.extract_code(self._strip_thinking(self._call_model(vibe_llm, code_p, gen_tokens, gen_temp, system_prompt=coder_sys)))
 
             # ── Phase 4: Execution Sandbox ───────────────────────────────
@@ -1245,7 +1272,10 @@ class AgentOrchestrator:
                 status_callback("VibeThinker fixing code...", "warning", "vibethinker", 72)
             failed_code = code
             failed_error = output
-            fix_p = f"Code failed:\n{code}\n\nError:\n{output}\n\nFix it. Output in ```python```."
+            # Truncate code and error to fit context
+            safe_code = code[:2000] if len(code) > 2000 else code
+            safe_error = output[:800] if len(output) > 800 else output
+            fix_p = f"Code failed:\n{safe_code}\n\nError:\n{safe_error}\n\nFix it. Output in ```python```."
             code = Sandbox.extract_code(self._strip_thinking(self._call_model(vibe_llm, fix_p, gen_tokens, gen_temp, system_prompt=coder_sys)))
             ok, output = self.sandbox.execute(code)
             if ok:
@@ -1260,7 +1290,7 @@ class AgentOrchestrator:
                 status_callback("Deep Escalation: VibeThinker rewriting...", "warning", "vibethinker", 80)
             esc_p = (
                 f"Code failed TWICE. You MUST fix it.\nPlan:\n{compiled_plan[:1500]}\n"
-                f"Code:\n{code}\nError:\n{output}\n"
+                f"Code:\n{code[:2000]}\nError:\n{output[:800]}\n"
                 f"Rewrite the ENTIRE script from scratch in ```python```. Think step by step."
             )
             esc_resp = self._strip_thinking(self._call_model(vibe_llm, esc_p, gen_tokens, gen_temp, system_prompt=coder_sys))
@@ -1329,7 +1359,11 @@ class AgentOrchestrator:
                     if rnd > 0:
                         draft_p += "\n\nYour previous answer had errors. Rewrite from scratch."
                     if lessons:
-                        draft_p += f"\n\nLESSONS FROM PREVIOUS FAILURES:\n{lessons}"
+                        draft_p += f"\n\nLESSONS FROM PREVIOUS FAILURES:\n{lessons[:800]}"
+                    # Safety: truncate prompt to leave room for generation
+                    max_reason_chars = (ds_ctx - gen_tokens - 200) * 3
+                    if len(draft_p) > max_reason_chars > 300:
+                        draft_p = draft_p[:max_reason_chars]
                     ds_answer = self._strip_thinking(self._call_model(ds_llm, draft_p, gen_tokens, gen_temp, system_prompt=reasoning_sys))
 
                     if status_callback:
@@ -1359,7 +1393,11 @@ class AgentOrchestrator:
                         router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
                         viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                         return f"{vibe_answer}{viz}"
-                    ds_safe = f"{ds_safe}\n\nPrevious errors: {pg_out[:500]}"
+                    # Don't let ds_safe grow unboundedly — cap the appended errors
+                    error_summary = pg_out[:300]
+                    if len(ds_safe) + len(error_summary) < (ds_ctx - gen_tokens - 200) * 3:
+                        ds_safe = f"{ds_safe}\n\nPrevious errors: {error_summary}"
+                    # else: silently skip appending to prevent overflow
 
                 # ── Nuclear Reset: extract lessons and restart ────────────
                 all_errors.append(f"Reset {reset+1}: {pg_out[:500]}")
