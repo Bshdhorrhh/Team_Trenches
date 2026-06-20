@@ -393,6 +393,8 @@ body {
 
 .msg-row.user .msg-body {
   text-align: right;
+  max-width: 70%;
+  margin-left: auto;
 }
 
 
@@ -406,7 +408,8 @@ body {
   font-size: 0.95rem;
   line-height: 1.7;
   color: var(--text-primary);
-  overflow-x: auto;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .msg-body strong {
@@ -1092,4 +1095,57 @@ body {
   color: var(--thinking-text);
   padding: 0 2px;
 }
+
+/* Collapsible User Messages */
+.user-message-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.user-message-content {
+  width: 100%;
+  transition: max-height 0.3s ease;
+}
+
+.user-message-content.collapsed {
+  max-height: 108px;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-message-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
+.user-message-content.expanded {
+  max-height: none;
+}
+
+.user-message-toggle {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.user-message-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--accent-hover);
+}
+
 

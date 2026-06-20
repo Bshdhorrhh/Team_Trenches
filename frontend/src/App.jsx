@@ -332,6 +332,50 @@ const MessageRenderer = ({ text }) => {
 };
 
 /* ═══════════════════════════════════════════════════
+   USER MESSAGE COMPONENT (Collapsible after 4 lines)
+   ═══════════════════════════════════════════════════ */
+const UserMessage = ({ text }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const textRef = useRef(null);
+
+  useEffect(() => {
+    const checkTruncation = () => {
+      if (textRef.current) {
+        setIsTruncated(textRef.current.scrollHeight > 108);
+      }
+    };
+    checkTruncation();
+    const timer = setTimeout(checkTruncation, 50);
+    window.addEventListener("resize", checkTruncation);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", checkTruncation);
+    };
+  }, [text]);
+
+  return (
+    <div className="user-message-container">
+      <div
+        ref={textRef}
+        className={`user-message-content ${isExpanded ? "expanded" : "collapsed"}`}
+      >
+        <MessageRenderer text={text} />
+      </div>
+      {isTruncated && (
+        <button
+          className="user-message-toggle"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? "Show Less ▲" : "Show More ▼"}
+        </button>
+      )}
+    </div>
+  );
+};
+
+
+/* ═══════════════════════════════════════════════════
    THINKING BLOCK (DeepSeek-style)
    ═══════════════════════════════════════════════════ */
 const ThinkingBlock = ({ logs, isActive }) => {
@@ -756,7 +800,11 @@ export default function App() {
                     {msg.type === "ai" && msg.logs && msg.logs.length > 0 && (
                       <ThinkingBlock logs={msg.logs} isActive={false} />
                     )}
-                    <MessageRenderer text={msg.text} />
+                    {msg.type === "user" ? (
+                      <UserMessage text={msg.text} />
+                    ) : (
+                      <MessageRenderer text={msg.text} />
+                    )}
                   </div>
                 </div>
               ))}
