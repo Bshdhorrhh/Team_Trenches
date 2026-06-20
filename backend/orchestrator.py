@@ -665,7 +665,12 @@ class AgentOrchestrator:
             "fourier transform", "fft", "wavelet", "signal processing",
             "3d interactive", "figure-eight", "three-body", "chaotic"
         ]
-        if any(kw in prompt_lower for kw in compute_keywords) and "CODING" not in upper:
+        
+        # Don't override if the user explicitly wants theoretical reasoning
+        theory_keywords = ["explain", "derive", "why", "concept", "theory", "theoretically", "describe", "prove"]
+        wants_theory = any(kw in prompt_lower for kw in theory_keywords)
+        
+        if any(kw in prompt_lower for kw in compute_keywords) and "CODING" not in upper and not wants_theory:
             # If the prompt asks to calculate/simulate AND show results, it needs code
             action_keywords = ["calculate", "compute", "simulate", "model", "solve", "render", "plot", "show", "verify computationally"]
             if any(kw in prompt_lower for kw in action_keywords):
