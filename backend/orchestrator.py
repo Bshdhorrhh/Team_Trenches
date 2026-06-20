@@ -654,6 +654,23 @@ class AgentOrchestrator:
                 return "REASONING"
             return "SIMPLE"
 
+        # Override: computational/simulation prompts that need code execution
+        # These are often misclassified as REASONING but require code to produce results
+        compute_keywords = [
+            "calculate", "simulate", "trajectory", "numerical", "rk4", "runge-kutta",
+            "euler method", "integration", "ode", "differential equation", "3d plot",
+            "interactive plot", "render", "visualization", "animation", "n-body",
+            "pendulum", "projectile", "orbit", "monte carlo", "finite element",
+            "neural network", "train a model", "gradient descent", "backpropagation",
+            "fourier transform", "fft", "wavelet", "signal processing",
+            "3d interactive", "figure-eight", "three-body", "chaotic"
+        ]
+        if any(kw in prompt_lower for kw in compute_keywords) and "CODING" not in upper:
+            # If the prompt asks to calculate/simulate AND show results, it needs code
+            action_keywords = ["calculate", "compute", "simulate", "model", "solve", "render", "plot", "show", "verify computationally"]
+            if any(kw in prompt_lower for kw in action_keywords):
+                return "CODING"
+
         # Strict keyword extraction from model response
         if "CODING" in upper:
             return "CODING"
@@ -663,8 +680,8 @@ class AgentOrchestrator:
             return "SIMPLE"
             
         # Fallback: keyword scan on the original prompt for safety
-        code_keywords = ["write code", "write a code", "fix code", "debug", "script", "implement", "program", "compile", "function(", "def ", "class ", "import "]
-        reason_keywords = ["explain", "prove", "derive", "why ", "how does", "in detail", "theory", "analyze", "compare", "solve"]
+        code_keywords = ["write code", "write a code", "fix code", "debug", "script", "implement", "program", "compile", "function(", "def ", "class ", "import ", "calculate", "simulate", "trajectory", "numerical", "3d plot"]
+        reason_keywords = ["explain", "prove", "derive", "why ", "how does", "in detail", "theory", "analyze", "compare"]
         if any(kw in prompt_lower for kw in code_keywords):
             return "CODING"
         if any(kw in prompt_lower for kw in reason_keywords):
@@ -689,19 +706,26 @@ class AgentOrchestrator:
         Returns (verified: bool, output: str, test_code: str)
         """
         playground_prompt = (
-            f"Write a Python script (max 40 lines) that {'tests this code logic' if purpose == 'logic' else 'verifies this reasoning'}.\n"
-            "Use assertions and print 'VERIFIED' as the last line if all checks pass.\n\n"
+            f"Write a Python script (max 50 lines) that {'tests this code logic' if purpose == 'logic' else 'verifies this reasoning'}.\n\n"
+            "VERIFICATION RULES:\n"
+            "1. Test the CORE claim/formula with concrete numerical values\n"
+            "2. Use relative tolerance (rtol=1e-3) for floating point comparisons, not exact equality\n"
+            "3. Check at least 2 different test cases or boundary conditions\n"
+            "4. Check dimensional consistency (units make sense)\n"
+            "5. Use assert statements with descriptive messages\n"
+            "6. Print 'VERIFIED' as the LAST line ONLY if ALL assertions pass\n"
+            "7. Do NOT print 'VERIFIED' if any assertion fails\n\n"
             "You have access to these scientific tools:\n"
             "  - math, cmath           → Core math operations, trigonometry, constants\n"
             "  - numpy                 → Arrays, linear algebra, matrix operations, statistics\n"
             "  - sympy                 → Symbolic math: algebra, calculus, equation solving, proofs\n"
-            "  - scipy                 → Physics/Biology: scipy.constants, scipy.integrate (systems biology metabolic/enzyme kinetics ODEs, kinematics), scipy.optimize\n"
+            "  - scipy                 → Physics/Biology: scipy.constants, scipy.integrate, scipy.optimize\n"
             "  - pint                  → Unit verification: check that formulas produce correct physical units\n"
             "  - z3 (z3-solver)        → Formal logic & theorem proving: constraint satisfaction, SAT solving\n"
             "  - networkx              → Graph theory: shortest paths, connectivity, circuit analysis\n"
             "  - astropy               → Astrophysics: celestial mechanics, orbital calculations, cosmology\n"
-            "  - Bio (Biopython)       → Bioinformatics: sequence transcription/translation, codon tables, molecular weights, alignments\n"
-            "  - rdkit (RDKit)         → Cheminformatics: molecular structures, chemical bonds, periodic elements, reactions\n"
+            "  - Bio (Biopython)       → Bioinformatics: sequence transcription/translation, codon tables\n"
+            "  - rdkit (RDKit)         → Cheminformatics: molecular structures, chemical bonds\n"
             "  - itertools, collections → Combinatorics, permutations, advanced data structures\n\n"
             "Pick the MOST APPROPRIATE tool for the task. Do NOT import all of them.\n"
             "Do NOT use plotly, matplotlib, pygame, or any GUI.\n"
@@ -717,10 +741,14 @@ class AgentOrchestrator:
     def _extract_failure_lessons(self, critic_llm, failed_plan, all_errors):
         """Nuclear Reset: extract key lessons from failures for a fresh restart."""
         p = (
-            "These attempts ALL FAILED. Extract 3-5 KEY LESSONS for rewriting:\n\n"
+            "These attempts ALL FAILED. Perform root-cause analysis and extract LESSONS.\n\n"
             f"Plan:\n{failed_plan[:1500]}\n\n"
             f"Errors:\n{all_errors[:1500]}\n\n"
-            "Reply with a numbered list of specific, actionable lessons ONLY."
+            "For each failure, identify:\n"
+            "1. ROOT CAUSE: What exactly went wrong (wrong formula, missing import, logic error, etc.)\n"
+            "2. CORRECT APPROACH: What the correct solution should be\n"
+            "3. VERIFICATION: How to check the fix is right\n\n"
+            "Reply with a numbered list of 3-5 specific, actionable lessons. Be precise."
         )
         lessons = self._call_model(critic_llm, p, max_tokens=512, temperature=0.3)
         return self._strip_thinking(lessons)
@@ -1189,21 +1217,39 @@ class AgentOrchestrator:
 
         planner_sys = (
             "You are a world-class scientist, physicist, and software planner.\n"
-            "Your task is to draft a step-by-step logic plan for the user's query.\n"
-            "Ensure maximum accuracy by following these principles:\n"
-            "1. Physical/Mathematical Rigor: Double-check all physical formulas. Avoid mixing up linear drag (F_d = -c*v) and quadratic drag (F_d = -0.5*C_d*A*rho*v*||v||). Include all real-world constants (e.g., cross-sectional area A, drag coefficient C_d, air density rho, mass m).\n"
-            "2. Complete Multi-Dimensional Coordinates: For 3D kinematics, use actual 3D launch angles (e.g. elevation theta AND azimuth/bearing phi) rather than a single 2D angle. Ensure all coordinate axes (x, y, z) are derived correctly.\n"
-            "3. Structured Workflow: Detail the exact equations, numerical integration method (e.g. Euler, RK4), stopping boundaries (e.g., stopping when hitting the ground), and data arrays needed."
+            "Your task is to draft a step-by-step logic plan for the user's query.\n\n"
+            "MANDATORY ACCURACY RULES:\n"
+            "1. Physical/Mathematical Rigor: Double-check ALL formulas before writing them. "
+            "Avoid mixing up linear drag (F_d = -c*v) and quadratic drag (F_d = -0.5*C_d*A*rho*v*|v|). "
+            "State all physical constants explicitly with their numerical values and SI units.\n"
+            "2. Complete Multi-Dimensional Coordinates: For 3D problems, decompose EVERY vector "
+            "into all 3 components (x, y, z). Never reduce a 3D problem to 2D unless explicitly stated.\n"
+            "3. Initial Conditions: For well-known problems (three-body figure-eight, double pendulum, "
+            "Lorenz attractor, etc.), use KNOWN PUBLISHED initial conditions from the literature, "
+            "not made-up values. Cite the source or standard reference if possible.\n"
+            "4. Numerical Methods: Specify the exact integration scheme (Euler, RK4, Verlet, etc.), "
+            "time step size, total simulation time, and stopping conditions.\n"
+            "5. Conservation Laws: For any physical simulation, explicitly state which conserved quantities "
+            "(energy, momentum, angular momentum) should be verified and how to check them.\n"
+            "6. OUTPUT FORMAT: Write a numbered list of steps. Each step must state WHAT to compute, "
+            "the EXACT formula, and the expected data structure (array shape, variable names).\n"
+            "7. Think step by step. If you are unsure about any formula, derive it from first principles."
         )
 
         coder_sys = (
             "You are an expert computational programmer and software engineer.\n"
-            "Your job is to translate the logic plan into a complete, clean, and immediately runnable Python script.\n"
-            "RULES:\n"
-            "1. Implement the mathematical and physical equations exactly as described in the plan.\n"
-            "2. Do NOT write placeholders, mock functions, or abbreviated loop bodies. The code must be 100% complete, functional, and printable.\n"
-            "3. Ensure the simulation code handles conditions properly (e.g., stopping when height y < 0, checking for zero division).\n"
-            "4. Verify imports and usage (e.g., numpy, scipy, matplotlib)."
+            "Your job is to translate the logic plan into a complete, clean, and immediately runnable Python script.\n\n"
+            "STRICT RULES:\n"
+            "1. Implement equations EXACTLY as described in the plan. Do NOT simplify or approximate.\n"
+            "2. Do NOT write placeholders, mock functions, or abbreviated loop bodies. EVERY line must be real.\n"
+            "3. Handle edge cases: division by zero (add softening epsilon), array bounds, negative sqrt.\n"
+            "4. Print clear, formatted numerical results (e.g., 'Max height: 127.42 m').\n"
+            "5. For simulations: use numpy arrays, vectorized operations where possible.\n"
+            "6. For plotting: use matplotlib or plotly. Always label axes with units.\n"
+            "7. The script MUST run standalone with `python script.py` — no user input, no GUI blocking.\n"
+            "8. Import ONLY what you use. Do not import unused libraries.\n"
+            "9. Add a brief comment above each major section explaining what it does.\n"
+            "10. For conservation checks: compute and print the relative error (|E_final - E_initial|/|E_initial|)."
         )
 
         for reset in range(max_resets):
@@ -1272,10 +1318,20 @@ class AgentOrchestrator:
                 status_callback("VibeThinker fixing code...", "warning", "vibethinker", 72)
             failed_code = code
             failed_error = output
-            # Truncate code and error to fit context
+            # Structured error analysis for smarter fixing
             safe_code = code[:2000] if len(code) > 2000 else code
             safe_error = output[:800] if len(output) > 800 else output
-            fix_p = f"Code failed:\n{safe_code}\n\nError:\n{safe_error}\n\nFix it. Output in ```python```."
+            fix_p = (
+                f"The following Python code FAILED with an error.\n\n"
+                f"CODE:\n{safe_code}\n\n"
+                f"ERROR:\n{safe_error}\n\n"
+                f"INSTRUCTIONS:\n"
+                f"1. Identify the exact line and cause of the error\n"
+                f"2. Fix ONLY the bug — do not rewrite unrelated parts\n"
+                f"3. Make sure all imports are present\n"
+                f"4. Test edge cases (division by zero, empty arrays, etc.)\n"
+                f"5. Output the COMPLETE corrected script in ```python``` blocks."
+            )
             code = Sandbox.extract_code(self._strip_thinking(self._call_model(vibe_llm, fix_p, gen_tokens, gen_temp, system_prompt=coder_sys)))
             ok, output = self.sandbox.execute(code)
             if ok:
@@ -1337,9 +1393,18 @@ class AgentOrchestrator:
             status_callback(f"Reasoning mode: {mode}", "info", "router", 15)
 
         reasoning_sys = (
-            "You are a rigorous scientific researcher and expert logic reasoner.\n"
-            "Provide a step-by-step, factually precise, and mathematically sound answer.\n"
-            "Avoid common traps: explicitly verify physics models (e.g. linear vs. quadratic drag), include all coordinate components in multi-dimensional problems, define all assumptions and physical constants, and complete all math derivations fully."
+            "You are a rigorous scientific researcher and expert logic reasoner.\n\n"
+            "ACCURACY REQUIREMENTS:\n"
+            "1. Think step by step. Show your work for every derivation.\n"
+            "2. State all assumptions explicitly at the beginning.\n"
+            "3. Define all variables with their units before using them.\n"
+            "4. For physics: verify dimensional consistency of every equation.\n"
+            "5. For math: check boundary conditions and special cases.\n"
+            "6. Avoid common traps: linear vs. quadratic drag, 2D vs. 3D decomposition, "
+            "sign conventions, reference frame consistency.\n"
+            "7. If you cite a formula, state where it comes from (Newton's 2nd law, etc.).\n"
+            "8. Complete ALL derivations fully — do not skip steps or say 'it can be shown that'.\n"
+            "9. If uncertain about a specific value or fact, say so explicitly rather than guessing."
         )
 
         if use_playground:
