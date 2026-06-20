@@ -1219,47 +1219,65 @@ class AgentOrchestrator:
             status_callback(f"Reasoning mode: {mode}", "info", "router", 15)
 
         if use_playground:
-            # ── Playground-Verified Reasoning ────────────────────────────
-            max_rounds = 3
-            ds_answer = ""
-            for rnd in range(max_rounds):
-                if status_callback:
-                    status_callback("DeepSeek-R1 reasoning + playground...", "info", "deepseek_r1", 25 + rnd*15)
-                draft_p = f"Provide a detailed, rigorous answer:\n{ds_safe}"
-                if rnd > 0:
-                    draft_p += "\n\nYour previous answer had errors. Rewrite from scratch."
-                ds_answer = self._strip_thinking(self._call_model(ds_llm, draft_p, gen_tokens, gen_temp))
+            # ── Playground-Verified Reasoning (with Nuclear Reset) ────────
+            max_resets = 2
+            lessons = ""
+            all_errors = []
 
-                if status_callback:
-                    status_callback("Verifying in Reasoning Playground...", "info", "deepseek_r1", 35 + rnd*15)
-                verified, pg_out, _ = self._run_playground(ds_llm, ds_answer, "reasoning")
-
-                if verified:
+            for reset in range(max_resets):
+                max_rounds = 3
+                ds_answer = ""
+                for rnd in range(max_rounds):
                     if status_callback:
-                        status_callback("Reasoning VERIFIED!", "success", "deepseek_r1", 80)
-                    router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                    viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                    return f"### Verified Answer\n{ds_answer}{viz}"
+                        lbl = f"Nuclear Reset #{reset}: DeepSeek-R1 re-reasoning..." if reset else "DeepSeek-R1 reasoning + playground..."
+                        status_callback(lbl, "info" if not reset else "warning", "deepseek_r1", 25 + rnd*12)
+                    draft_p = f"Provide a detailed, rigorous answer:\n{ds_safe}"
+                    if rnd > 0:
+                        draft_p += "\n\nYour previous answer had errors. Rewrite from scratch."
+                    if lessons:
+                        draft_p += f"\n\nLESSONS FROM PREVIOUS FAILURES:\n{lessons}"
+                    ds_answer = self._strip_thinking(self._call_model(ds_llm, draft_p, gen_tokens, gen_temp))
 
-                # VibeThinker tries to fix
-                if status_callback:
-                    status_callback("VibeThinker correcting reasoning...", "warning", "vibethinker", 45 + rnd*15)
-                vibe_llm = self._get_model("vibethinker", required_ctx=ds_ctx)
-                vibe_p = (
-                    f"This answer failed verification.\nAnswer:\n{ds_answer[:2000]}\n"
-                    f"Error:\n{pg_out[:1000]}\nProvide a corrected, complete answer."
-                )
-                vibe_answer = self._strip_thinking(self._call_model(vibe_llm, vibe_p, gen_tokens, gen_temp))
-                v2, _, _ = self._run_playground(vibe_llm, vibe_answer, "reasoning")
-                if v2:
                     if status_callback:
-                        status_callback("VibeThinker's correction VERIFIED!", "success", "vibethinker", 80)
-                    router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                    viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                    return f"{vibe_answer}{viz}"
-                ds_safe = f"{ds_safe}\n\nPrevious errors: {pg_out[:500]}"
+                        status_callback("Verifying in Reasoning Playground...", "info", "deepseek_r1", 35 + rnd*12)
+                    verified, pg_out, _ = self._run_playground(ds_llm, ds_answer, "reasoning")
 
-            # Exhausted playground rounds — return best effort
+                    if verified:
+                        if status_callback:
+                            status_callback("Reasoning VERIFIED!", "success", "deepseek_r1", 80)
+                        router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                        viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"### Verified Answer\n{ds_answer}{viz}"
+
+                    # VibeThinker tries to fix
+                    if status_callback:
+                        status_callback("VibeThinker correcting reasoning...", "warning", "vibethinker", 45 + rnd*12)
+                    vibe_llm = self._get_model("vibethinker", required_ctx=ds_ctx)
+                    vibe_p = (
+                        f"This answer failed verification.\nAnswer:\n{ds_answer[:2000]}\n"
+                        f"Error:\n{pg_out[:1000]}\nProvide a corrected, complete answer."
+                    )
+                    vibe_answer = self._strip_thinking(self._call_model(vibe_llm, vibe_p, gen_tokens, gen_temp))
+                    v2, _, _ = self._run_playground(vibe_llm, vibe_answer, "reasoning")
+                    if v2:
+                        if status_callback:
+                            status_callback("VibeThinker's correction VERIFIED!", "success", "vibethinker", 80)
+                        router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                        viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"{vibe_answer}{viz}"
+                    ds_safe = f"{ds_safe}\n\nPrevious errors: {pg_out[:500]}"
+
+                # ── Nuclear Reset: extract lessons and restart ────────────
+                all_errors.append(f"Reset {reset+1}: {pg_out[:500]}")
+                if reset < max_resets - 1:
+                    if status_callback:
+                        status_callback("Nuclear Reset: Extracting lessons from failures...", "error", "vibethinker", 85)
+                    vibe_llm = self._get_model("vibethinker", required_ctx=ds_ctx)
+                    lessons = self._extract_failure_lessons(vibe_llm, ds_answer, "\n".join(all_errors))
+
+            # All resets exhausted — return best effort
+            if status_callback:
+                status_callback("Max retries reached. Returning best effort.", "warning", "system", 90)
             router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
             viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             return f"{ds_answer}{viz}"

@@ -55,8 +55,9 @@ const PlotlyChart = ({ jsonStr }) => {
 const ArtifactSandbox = ({ htmlCode }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [injectedHtml, setInjectedHtml] = useState("");
+  const [blobUrl, setBlobUrl] = useState(null);
   const iframeRef = useRef(null);
+  const prevBlobRef = useRef(null);
 
   useEffect(() => {
     if (!htmlCode) return;
@@ -92,13 +93,28 @@ const ArtifactSandbox = ({ htmlCode }) => {
           doc = injection + doc;
         }
       }
-      setInjectedHtml(doc);
+
+      // Revoke the PREVIOUS blob URL only when creating a new one (never in cleanup)
+      if (prevBlobRef.current) {
+        URL.revokeObjectURL(prevBlobRef.current);
+      }
+      const blob = new Blob([doc], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      prevBlobRef.current = url;
+      setBlobUrl(url);
       setHasError(false);
     } catch (err) {
-      console.error("Artifact injection error:", err);
+      console.error("Artifact blob error:", err);
       setHasError(true);
     }
   }, [htmlCode]);
+
+  // Cleanup on unmount only
+  useEffect(() => {
+    return () => {
+      if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+    };
+  }, []);
 
   if (hasError || !htmlCode) {
     return (
@@ -137,10 +153,10 @@ const ArtifactSandbox = ({ htmlCode }) => {
         </div>
       </div>
       <div className="artifact-iframe-wrap">
-        {injectedHtml && (
+        {blobUrl && (
           <iframe
             ref={iframeRef}
-            srcDoc={injectedHtml}
+            src={blobUrl}
             sandbox="allow-scripts allow-same-origin"
             title="AI Artifact"
             className="artifact-iframe"
