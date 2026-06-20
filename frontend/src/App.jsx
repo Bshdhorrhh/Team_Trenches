@@ -56,13 +56,10 @@ const ArtifactSandbox = ({ htmlCode }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const iframeRef = useRef(null);
-  const writtenRef = useRef("");
 
   useEffect(() => {
     if (!htmlCode || !iframeRef.current) return;
-    // Avoid re-writing the same content
-    if (writtenRef.current === htmlCode) return;
-    writtenRef.current = htmlCode;
+
 
     try {
       // Bulletproof dark mode and Error Catcher injection

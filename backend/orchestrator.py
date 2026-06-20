@@ -483,7 +483,15 @@ class AgentOrchestrator:
         cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
         # Also handle unclosed <think> tags (model sometimes forgets to close)
         cleaned = re.sub(r'<think>.*', '', cleaned, flags=re.DOTALL)
-        return cleaned.strip()
+        cleaned = cleaned.strip()
+        
+        if cleaned:
+            return cleaned
+            
+        # If stripping removed EVERYTHING, it means the model put its entire answer 
+        # inside the think block. We must strip ONLY the tags, keeping the content!
+        text_without_tags = re.sub(r'</?think>', '', text)
+        return text_without_tags.strip()
 
 
     def _crunch_prompt(self, prompt, target_model, max_tokens_limit, status_callback=None, router_llm=None):
@@ -1015,10 +1023,14 @@ class AgentOrchestrator:
                     "Remove all conversational filler. Output ONLY the raw keywords.\n\n"
                     f"User Request: {prompt}"
                 )
-                search_query = self._call_model(router_llm, opt_prompt, max_tokens=30, temperature=0.1).strip()
-                search_query = search_query.replace('"', '').replace('`', '').strip()
-                if not search_query:
-                    search_query = prompt
+                raw_query = self._call_model(router_llm, opt_prompt, max_tokens=30, temperature=0.1).strip()
+                # Clean LLM output: take first line only, strip list prefixes and quotes
+                search_query = raw_query.split('\n')[0].strip()
+                search_query = re.sub(r'^(Keywords?:?\s*|\d+\.\s*)', '', search_query, flags=re.IGNORECASE).strip()
+                search_query = search_query.replace('"', '').replace('`', '').replace('*', '').strip()
+                search_query = search_query[:80]  # Cap length for search engines
+                if not search_query or len(search_query) < 3:
+                    search_query = prompt[:80]
 
                 if status_callback:
                     status_callback(f"Searching: '{search_query}'...", "info", "router", 8)
@@ -1046,9 +1058,12 @@ class AgentOrchestrator:
                 print(f"Web search enrichment failed: {e}")
                 web_context = ""
                 
+        import datetime
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         enriched_prompt = (
-            f"Web Context:\n{web_context}\n\nUser Query:\n{prompt}"
-            if web_context else prompt
+            f"Current System Date/Time: {current_date}\n\nWeb Context:\n{web_context}\n\nUser Query:\n{prompt}"
+            if web_context else f"Current System Date/Time: {current_date}\n\nUser Query:\n{prompt}"
         )
 
         # ── Dynamic Context Sizing (VRAM-aware) ────────────────────────
