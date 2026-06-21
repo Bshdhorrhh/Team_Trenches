@@ -189,7 +189,8 @@ After every `CODING` or `REASONING` response, a **3D Gate Check** runs automatic
   - **Genetics/Bio/Chemistry:** Renders parametric DNA double-helices (`THREE.CatmullRomCurve3`), active transport membrane channels, lipid bilayers, and molecular compounds.
   - **Controls:** Includes glassmorphic sliders to interactively tweak physical/organic settings (e.g. mass ratio, speed, pH levels, ATP concentration) in real-time.
 - The artifact is sent to the React frontend, which renders it inside a **secure, isolated iframe sandbox** — exactly like Anthropic's Claude Artifacts.
-- The UI features a premium glassmorphic artifact window with expand-to-fullscreen and open-in-new-tab capabilities.
+- The UI features a premium glassmorphic artifact window with expand-to-fullscreen, manual hot-reloading (`↻`), and open-in-new-tab capabilities.
+- **Real-time Sandbox Console Overlay:** A live slide-up drawer inside the React UI that captures `console.log`, `console.warn`, and `console.error` directly from the secure iframe, enabling instant visual debugging of client-side Javascript simulations.
 - **Dual-Mode Fallback:** If the AI HTML generation fails validation, it falls back to a Python Plotly executor, running in the backend Sandbox and sending the clean JSON dataset to the frontend.
 
 ---
@@ -211,7 +212,8 @@ The system remembers what it has solved before and uses it to improve future res
 - **SQLite** with cosine similarity and keyword search as fallback
 - Stores **compact solution summaries** — not raw code dumps — to avoid context bloat
 - Stores **mistake-fix patterns** from the Reflexion loop to prevent regressing on similar tasks
-- Automatic **deduplication** — if a very similar task (>60% word overlap) is already stored, it skips saving
+- **Smart Deduplication** — uses NLP stopword filtering and punctuation stripping to intelligently merge near-identical tasks (>80% content word overlap) without falsely merging unique variable tasks.
+- **Concurrency-safe Architecture** — Uses dynamic connection pooling and 30-second lock timeouts for SQLite to gracefully handle multi-threaded async FastAPI requests.
 - Memory can be viewed (count), cleared, and inspected via the UI sidebar and REST API
 
 ---
