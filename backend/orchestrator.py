@@ -1075,6 +1075,9 @@ class AgentOrchestrator:
 
         cleaned_final = _strip_sandbox_prefix(viz_output).strip() if viz_output else ""
         if viz_success and cleaned_final.startswith("{"):
+            # Strip out any Warnings/Stderr block appended by the sandbox
+            if "\nWarnings/Stderr:\n" in cleaned_final:
+                cleaned_final = cleaned_final.split("\nWarnings/Stderr:\n")[0].strip()
             return f"\n\n### 3D Interactive Visualization\n<!--PLOTLY_JSON-->\n{cleaned_final}\n<!--/PLOTLY_JSON-->"
 
         # Final fallback: show the code with error (ensure code blocks are wrapped properly)
