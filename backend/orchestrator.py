@@ -1582,17 +1582,21 @@ class AgentOrchestrator:
             except Exception as es:
                 print(f"Emergency reasoning search recovery failed: {es}")
 
+            final_ans = vibe_answer if 'vibe_answer' in locals() else ds_answer
+            final_test = vibe_test_code if 'vibe_test_code' in locals() else test_code
+            final_out = vibe_pg_out if 'vibe_pg_out' in locals() else pg_out
+
             if status_callback:
                 status_callback("Max retries reached. Returning best effort.", "warning", "system", 98)
             router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-            viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+            viz = self._check_3d_gate(prompt, final_ans, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             verification_block = (
                 f"\n\n### Computational Verification (Failed)\n"
-                f"```python\n{test_code}\n```\n\n"
+                f"```python\n{final_test}\n```\n\n"
                 f"**Verification Output:**\n"
-                f"```text\n{pg_out}\n```"
+                f"```text\n{final_out}\n```"
             )
-            return f"### Best Effort Answer\n{ds_answer}{verification_block}{viz}"
+            return f"### Best Effort Answer\n{final_ans}{verification_block}{viz}"
 
         else:
             # ── Standard LLM Debate (non-testable reasoning) ─────────────
