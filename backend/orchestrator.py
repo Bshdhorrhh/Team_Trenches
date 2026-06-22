@@ -1556,13 +1556,14 @@ class AgentOrchestrator:
         if past_experience:
             ds_safe += past_experience
 
-        ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
-
         # ── Check: Can this be playground-verified? ──────────────────────
+        # Must check this BEFORE loading ds_llm to prevent EVM from evicting router_llm
         use_playground = self._is_playground_applicable(router_llm, prompt)
         if status_callback:
             mode = "Playground-Verified" if use_playground else "LLM Debate"
             status_callback(f"Reasoning mode: {mode}", "info", "router", 15)
+
+        ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
 
         reasoning_sys = (
             "You are a rigorous scientific researcher and expert logic reasoner.\n\n"
@@ -1589,6 +1590,8 @@ class AgentOrchestrator:
                 max_rounds = 3
                 ds_answer = ""
                 for rnd in range(max_rounds):
+                    # Re-acquire ds_llm because VibeThinker may have evicted it in the previous round
+                    ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     if status_callback:
                         lbl = f"Nuclear Reset #{reset} (Attempt {rnd+1}/3): DeepSeek-R1 re-reasoning..." if reset else f"DeepSeek-R1 reasoning + playground (Attempt {rnd+1}/3)..."
                         status_callback(lbl, "info" if not reset else "warning", "deepseek_r1", 25 + rnd*12)
