@@ -1922,6 +1922,7 @@ class AgentOrchestrator:
                             f"Explanation:\n{vibe_answer[:1500]}\n\n"
                             f"Correct the derivation or logic to fix this error, and provide the complete corrected explanation."
                         )
+                        ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                         vibe_answer = self._strip_thinking(self._call_model(ds_llm, corr_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
                         v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", model_key="deepseek_r1")
                     if v2:
