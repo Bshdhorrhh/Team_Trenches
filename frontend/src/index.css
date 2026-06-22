@@ -652,8 +652,8 @@ body {
   height: 32px;
   border-radius: 50%;
   border: none;
-  background: var(--text-primary);
-  color: var(--bg-primary);
+  background: #7700d8;
+  color: white;
   cursor: pointer;
   display: flex;
   align-items: center;
