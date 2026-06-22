@@ -93,10 +93,16 @@ class TransformerWrapper:
             del self.tokenizer
         gc.collect()
         if torch:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            if hasattr(torch, "xpu") and torch.xpu.is_available():
-                torch.xpu.empty_cache()
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            try:
+                if hasattr(torch, "xpu") and torch.xpu.is_available():
+                    torch.xpu.empty_cache()
+            except Exception:
+                pass
 
 
 class AgentOrchestrator:
@@ -260,10 +266,16 @@ class AgentOrchestrator:
         del model_obj
         gc.collect()
         if torch:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            if hasattr(torch, "xpu") and torch.xpu.is_available():
-                torch.xpu.empty_cache()
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            try:
+                if hasattr(torch, "xpu") and torch.xpu.is_available():
+                    torch.xpu.empty_cache()
+            except Exception:
+                pass
         print(f"  ✅ Evicted '{lru_key}'. RAM now: {self._get_ram_free_gb():.1f} GB free")
         return True
 
@@ -298,24 +310,26 @@ class AgentOrchestrator:
             free_ram = self._get_ram_free_gb()
 
         # ── CUDA/ROCm VRAM Check (NVIDIA + AMD ROCm dGPU) ───────────────
-        if torch and torch.cuda.is_available():
-            for gpu_idx in range(torch.cuda.device_count()):
-                vram_free = self._get_vram_free_gb(gpu_idx)
-                if vram_free is None:
-                    continue
-                # Use the larger of: static safety threshold OR (incoming model + 1.5 GB buffer)
-                # Note: 3.0 GB was too aggressive — it demanded 9 GB free to load a 6 GB model
-                # on a 16 GB P100, causing unnecessary evictions and stalls.
-                effective_threshold = self.vram_safety_gb
-                if required_vram_gb is not None:
-                    effective_threshold = max(self.vram_safety_gb, required_vram_gb + 1.5)
-                if vram_free < effective_threshold:
-                    print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free, need {effective_threshold:.1f} GB)")
-                    while vram_free < effective_threshold and self.model_access_order:
-                        if not self._evict_lru_model():
-                            break
-                        evicted_any = True
-                        vram_free = self._get_vram_free_gb(gpu_idx)
+        # Wrapped in try/except: on Kaggle P100 (sm_60) PyTorch's CUDA runtime
+        # is incompatible and torch.cuda calls can crash the process.
+        try:
+            if torch and torch.cuda.is_available():
+                for gpu_idx in range(torch.cuda.device_count()):
+                    vram_free = self._get_vram_free_gb(gpu_idx)
+                    if vram_free is None:
+                        continue
+                    effective_threshold = self.vram_safety_gb
+                    if required_vram_gb is not None:
+                        effective_threshold = max(self.vram_safety_gb, required_vram_gb + 1.5)
+                    if vram_free < effective_threshold:
+                        print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free, need {effective_threshold:.1f} GB)")
+                        while vram_free < effective_threshold and self.model_access_order:
+                            if not self._evict_lru_model():
+                                break
+                            evicted_any = True
+                            vram_free = self._get_vram_free_gb(gpu_idx)
+        except Exception as e:
+            print(f"⚠️ DMA: CUDA VRAM check skipped ({e})")
 
         # ── Linux sysfs VRAM Check (AMD/Intel Vulkan — no ROCm needed) ──
         sysfs_gpus = self._get_sysfs_gpu_vram()
@@ -355,13 +369,20 @@ class AgentOrchestrator:
         gc.collect()
         
         if torch:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            if hasattr(torch, "xpu") and torch.xpu.is_available():
-                torch.xpu.empty_cache()
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            try:
+                if hasattr(torch, "xpu") and torch.xpu.is_available():
+                    torch.xpu.empty_cache()
+            except Exception:
+                pass
 
     def _get_model(self, model_key, required_ctx=None):
         """Load a model with Dynamic Memory Allocator protection and dynamic context sizing."""
+        import time
         if required_ctx is None:
             required_ctx = self.context_length if self.context_length > 0 else 8192
 
@@ -380,16 +401,21 @@ class AgentOrchestrator:
                     self.model_access_order.remove(model_key)
                 del model_obj
                 gc.collect()
-                # ⚠️ Critical: Flush CUDA cache synchronously BEFORE reloading
-                # Without this, the old allocation stays in VRAM during the reload
-                # causing a double-allocation OOM on a 16 GB P100.
-                if torch and torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                    torch.cuda.empty_cache()
+                # ⚠️ llama-cpp-python manages its own CUDA context, independent of PyTorch.
+                # On Kaggle P100 (sm_60), PyTorch's CUDA runtime is INCOMPATIBLE and
+                # torch.cuda.synchronize() can segfault the process.
+                # We rely on time.sleep() to let llama.cpp's internal cudaFree() complete.
+                try:
+                    if torch and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass  # Safe to ignore — llama.cpp doesn't use PyTorch's CUDA allocator
                 if torch and hasattr(torch, "xpu") and torch.xpu.is_available():
-                    torch.xpu.empty_cache()
-                import time
-                time.sleep(1)  # Give llama.cpp's async CUDA deallocation time to complete
+                    try:
+                        torch.xpu.empty_cache()
+                    except Exception:
+                        pass
+                time.sleep(2)  # Give llama.cpp's async CUDA deallocation time to complete
             else:
                 self._touch_model(model_key)
                 return model_obj
@@ -399,9 +425,13 @@ class AgentOrchestrator:
         est_model_gb = self._estimate_model_size_gb(model_key)
         print(f"📦 DMA: Preparing to load '{model_key}' (~{est_model_gb:.1f} GB)")
         
-        # ── Kaggle dGPU Hot-Swap Guard (EVM) ─────────────────────────────
+        # ── EVM Hot-Swap Guard ────────────────────────────────────────────
         # On Kaggle P100 (16GB VRAM, 32GB RAM), aggressively flush ALL other models
         # from VRAM so the incoming model gets 100% of the VRAM KV Cache space.
+        # After EVM flush, skip _check_memory_pressure entirely — EVM guarantees
+        # all VRAM is free, and the pressure check's torch.cuda calls can crash
+        # on P100 (sm_60) where PyTorch's CUDA runtime is incompatible.
+        evm_flushed = False
         if getattr(self, 'kaggle_hotswap_mode', False) and self.loaded_models:
             models_to_flush = [mk for mk in list(self.loaded_models.keys()) if mk != model_key]
             if models_to_flush:
@@ -417,14 +447,13 @@ class AgentOrchestrator:
                             pass
                     del model_obj
                 gc.collect()
-                # ⚠️ Critical: synchronize + flush AFTER eviction
-                # llama.cpp's CUDA deallocation is async — without synchronize()
-                # the new model's allocation overlaps with the old one → OOM
-                if torch and torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                    torch.cuda.empty_cache()
-                import time
-                time.sleep(1)  # Extra safety margin for GPU memory system
+                # Use time.sleep instead of torch.cuda.synchronize which crashes on P100
+                try:
+                    if torch and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass  # Safe — llama.cpp manages its own CUDA memory
+                time.sleep(2)  # Let llama.cpp's internal cudaFree() complete
                 # Verify eviction actually freed VRAM
                 try:
                     free_vram, total_vram = torch.cuda.mem_get_info(0)
@@ -432,8 +461,14 @@ class AgentOrchestrator:
                     print(f"✅ DMA (EVM): VRAM after eviction: {free_vram_gb:.1f} GB free / {total_vram/(1024**3):.0f} GB total")
                 except Exception:
                     pass
+                evm_flushed = True
+            else:
+                evm_flushed = True  # Only our model is loaded, all VRAM is ours
                 
-        self._check_memory_pressure(required_vram_gb=est_model_gb)
+        # Skip memory pressure check if EVM already cleared VRAM — the pressure
+        # check runs torch.cuda.synchronize() internally which can crash on P100 (sm_60)
+        if not evm_flushed:
+            self._check_memory_pressure(required_vram_gb=est_model_gb)
 
         # ── iGPU Unified Memory Guard ─────────────────────────────────────
         # On Intel Iris Xe (and similar iGPUs), RAM IS VRAM. Loading two 7B
