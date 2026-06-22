@@ -186,6 +186,10 @@ class AgentOrchestrator:
                     self.max_auto_ctx = 8192  # Increased from 4096 to prevent token cutoff
                 elif total_vram_gb <= 24:
                     self.max_auto_ctx = 8192  # Increased from 6144
+                elif total_vram_gb <= 48:
+                    self.max_auto_ctx = 32768  # A6000 (48GB) / A100 (40GB) -> 32k context
+                else:
+                    self.max_auto_ctx = 65536  # H100 (80GB) -> 64k context
                 print(f"📐 DMA: Auto-context ceiling = {self.max_auto_ctx} tokens (based on {total_vram_gb:.0f} GB VRAM)")
             except Exception:
                 pass
