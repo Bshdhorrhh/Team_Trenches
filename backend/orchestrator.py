@@ -1887,6 +1887,7 @@ class AgentOrchestrator:
                     if status_callback:
                         status_callback(f"DeepSeek-R1 correcting reasoning (Attempt {rnd+1}/{max_rounds})...", "warning", "deepseek_r1", 45 + rnd*12)
                     vibe_p = (
+                        f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
                         f"This answer failed verification.\nAnswer:\n{ds_answer[:2000]}\n"
                         f"Error:\n{pg_out[:1000]}\nProvide a corrected, complete answer."
                     )
@@ -1919,16 +1920,9 @@ class AgentOrchestrator:
             if status_callback:
                 status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
             try:
-                # Construct a search query combining prompt keywords and python output/error
-                # Extract clean prompt keywords to keep it highly contextual
-                clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:8])
-                error_lines = [line.strip() for line in pg_out.split('\n') if line.strip()]
-                error_query = error_lines[-1] if error_lines else pg_out[:100]
-                if len(error_query) > 120:
-                    error_query = error_query[-120:]
-                
-                # Combine them into a highly relevant search term
-                search_term = f"{clean_prompt_query} {error_query}"
+                # Construct a clean search query using only prompt keywords to avoid search engine contamination
+                clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:12])
+                search_term = clean_prompt_query
                 if len(search_term) > 150:
                     search_term = search_term[:150]
 
@@ -1958,6 +1952,7 @@ class AgentOrchestrator:
                         if status_callback:
                             status_callback("Emergency verification failed. Attempting 1 correction round...", "warning", "deepseek_r1", 97)
                         corr_prompt = (
+                            f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
                             f"The emergency explanation failed verification with this traceback:\n"
                             f"{vibe_pg_out[:800]}\n\n"
                             f"Explanation:\n{vibe_answer[:1500]}\n\n"
@@ -1991,7 +1986,7 @@ class AgentOrchestrator:
             # ── Standard LLM Debate (non-testable reasoning) ─────────────
             if status_callback:
                 status_callback("DeepSeek-R1 drafting analysis...", "info", "deepseek_r1", 30)
-            ds_draft = self._strip_thinking(self._call_model(ds_llm, f"Provide a detailed answer:\n{ds_safe}", gen_tokens, gen_temp))
+            ds_draft = self._strip_thinking(self._call_model(ds_llm, f"Provide a detailed answer:\n{ds_safe}", gen_tokens, gen_temp, system_prompt=reasoning_sys))
 
             if status_callback:
                 status_callback("DeepSeek-R1 refining answer...", "info", "deepseek_r1", 60)
