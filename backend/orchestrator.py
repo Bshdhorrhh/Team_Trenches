@@ -1732,14 +1732,14 @@ class AgentOrchestrator:
                 error_query = error_query[-120:]
             
             # Construct a highly relevant search term combining prompt keywords and error
-            clean_prompt_query = " ".join([word for word in prompt.split() if len(word) > 3][:8])
+            clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:8])
             search_term = f"{clean_prompt_query} {error_query}"
             if len(search_term) > 150:
                 search_term = search_term[:150]
 
             if status_callback:
                 status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
-            web_results = self.web_search.search(search_term, max_results=2)
+            web_results = self.web_search.search(search_term, max_results=3)
             emergency_context = ""
             if web_results:
                 emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
@@ -1748,11 +1748,12 @@ class AgentOrchestrator:
                     status_callback("Emergency context acquired. Rewriting script...", "info", "deepseek_r1", 95)
                 ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                 emergency_prompt = (
+                    f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
                     f"The previous attempts failed with the following traceback:\n"
                     f"{output[:800]}\n\n"
                     f"We searched the web for this error and found the following references:\n"
                     f"{emergency_context}\n\n"
-                    f"Using this information, rewrite the complete functional Python script to fix the error.\n"
+                    f"Using this information, rewrite the complete functional Python script to fix the error and satisfy all original constraints.\n"
                     f"Original plan:\n{compiled_plan[:1500]}\n\n"
                     f"Output the complete script in a ```python``` block."
                 )
@@ -1918,7 +1919,7 @@ class AgentOrchestrator:
             try:
                 # Construct a search query combining prompt keywords and python output/error
                 # Extract clean prompt keywords to keep it highly contextual
-                clean_prompt_query = " ".join([word for word in prompt.split() if len(word) > 3][:8])
+                clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:8])
                 error_lines = [line.strip() for line in pg_out.split('\n') if line.strip()]
                 error_query = error_lines[-1] if error_lines else pg_out[:100]
                 if len(error_query) > 120:
@@ -1931,7 +1932,7 @@ class AgentOrchestrator:
 
                 if status_callback:
                     status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
-                web_results = self.web_search.search(search_term, max_results=2)
+                web_results = self.web_search.search(search_term, max_results=3)
                 emergency_context = ""
                 if web_results:
                     emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
@@ -1940,11 +1941,12 @@ class AgentOrchestrator:
                         status_callback("Emergency context acquired. Final reasoning correction...", "info", "deepseek_r1", 95)
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     emergency_prompt = (
+                        f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
                         f"The reasoning explanation failed sandbox verification with the error:\n"
                         f"{pg_out[:500]}\n\n"
                         f"We found the following context online for this issue:\n"
                         f"{emergency_context}\n\n"
-                        f"Correct the derivation/calculation to fix this issue, and formulate the final detailed explanation.\n"
+                        f"Correct the derivation/calculation to fix this issue, and formulate the final detailed explanation that perfectly satisfies all original user request constraints.\n"
                         f"Failed Draft:\n{ds_answer[:1500]}"
                     )
                     vibe_answer = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
