@@ -926,11 +926,16 @@ class AgentOrchestrator:
         result = self._call_model(router_llm, p, max_tokens=10, temperature=0.1)
         return "YES" in str(result).upper()
 
-    def _run_playground(self, model, hypothesis, purpose="logic", status_callback=None):
+    def _run_playground(self, model, hypothesis, purpose="logic", status_callback=None, model_key=None):
         """
         Have a model write a verification script and run it in the sandbox.
         Returns (verified: bool, output: str, test_code: str)
         """
+        coder_model = model
+        # Redirect coding tasks away from VibeThinker 1.5B (which produces SyntaxErrors in Python generation)
+        if model_key == "vibethinker" or (hasattr(model, "model_path") and "vibethinker" in getattr(model, "model_path", "").lower()):
+            coder_model = self._get_model("router", required_ctx=2048)
+
         playground_prompt = (
             f"Write a Python script (max 50 lines) that {'tests this code logic' if purpose == 'logic' else 'verifies this reasoning'}.\n\n"
             "VERIFICATION RULES:\n"
@@ -958,7 +963,7 @@ class AgentOrchestrator:
             "Output ONLY the code in ```python``` blocks.\n\n"
             f"To verify:\n{hypothesis[:2000]}"
         )
-        test_response = self._call_model(model, playground_prompt, max_tokens=4096, temperature=0.1)
+        test_response = self._call_model(coder_model, playground_prompt, max_tokens=4096, temperature=0.1)
         test_code = Sandbox.extract_code(test_response)
         success, output = self.sandbox.execute(test_code, language='python')
         verified = success and "VERIFIED" in output
@@ -1472,7 +1477,7 @@ class AgentOrchestrator:
         if past_experience:
             ds_safe += past_experience
 
-        max_resets = 1
+        max_resets = 2
         lessons = ""
         all_errors = []
 
@@ -1539,7 +1544,7 @@ class AgentOrchestrator:
             # ── Phase 2: Reasoning Sandbox — Verify Logic ────────────────
             if status_callback:
                 status_callback("Reasoning Sandbox: Verifying logic...", "info", "deepseek_r1", 30)
-            verified, pg_out, _ = self._run_playground(ds_llm, ds_draft, "logic")
+            verified, pg_out, _ = self._run_playground(ds_llm, ds_draft, "logic", model_key="deepseek_r1")
 
             if not verified:
                 if status_callback:
@@ -1550,7 +1555,7 @@ class AgentOrchestrator:
                     f"Error:\n{pg_out[:1000]}\nRewrite a corrected logic plan."
                 )
                 ds_draft = self._strip_thinking(self._call_model(vibe_llm, fix_p, gen_tokens, logic_temp, system_prompt=planner_sys))
-                v2, _, _ = self._run_playground(vibe_llm, ds_draft, "logic")
+                v2, _, _ = self._run_playground(vibe_llm, ds_draft, "logic", model_key="vibethinker")
                 if v2 and status_callback:
                     status_callback("VibeThinker corrected the logic!", "success", "vibethinker", 40)
                 elif status_callback:
@@ -1720,7 +1725,7 @@ class AgentOrchestrator:
 
         if use_playground:
             # ── Playground-Verified Reasoning (with Nuclear Reset) ────────
-            max_resets = 1
+            max_resets = 2
             lessons = ""
             all_errors = []
 
@@ -1746,7 +1751,7 @@ class AgentOrchestrator:
 
                     if status_callback:
                         status_callback(f"Verifying in Reasoning Playground (Attempt {rnd+1}/3)...", "info", "deepseek_r1", 35 + rnd*12)
-                    verified, pg_out, test_code = self._run_playground(ds_llm, ds_answer, "reasoning")
+                    verified, pg_out, test_code = self._run_playground(ds_llm, ds_answer, "reasoning", model_key="deepseek_r1")
 
                     if verified:
                         if status_callback:
@@ -1771,7 +1776,7 @@ class AgentOrchestrator:
                         f"Error:\n{pg_out[:1000]}\nProvide a corrected, complete answer."
                     )
                     vibe_answer = self._strip_thinking(self._call_model(vibe_llm, vibe_p, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(vibe_llm, vibe_answer, "reasoning")
+                    v2, vibe_pg_out, vibe_test_code = self._run_playground(vibe_llm, vibe_answer, "reasoning", model_key="vibethinker")
                     if v2:
                         if status_callback:
                             status_callback("VibeThinker's correction VERIFIED!", "success", "vibethinker", 80)
@@ -1804,11 +1809,19 @@ class AgentOrchestrator:
             if status_callback:
                 status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
             try:
+                # Construct a search query combining prompt keywords and python output/error
+                # Extract clean prompt keywords to keep it highly contextual
+                clean_prompt_query = " ".join([word for word in prompt.split() if len(word) > 3][:8])
                 error_lines = [line.strip() for line in pg_out.split('\n') if line.strip()]
                 error_query = error_lines[-1] if error_lines else pg_out[:100]
                 if len(error_query) > 120:
                     error_query = error_query[-120:]
-                search_term = f"python reasoning {error_query}"
+                
+                # Combine them into a highly relevant search term
+                search_term = f"{clean_prompt_query} {error_query}"
+                if len(search_term) > 150:
+                    search_term = search_term[:150]
+
                 if status_callback:
                     status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
                 web_results = self.web_search.search(search_term, max_results=2)
@@ -1828,7 +1841,7 @@ class AgentOrchestrator:
                         f"Failed Draft:\n{ds_answer[:1500]}"
                     )
                     vibe_answer = self._strip_thinking(self._call_model(vibe_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(vibe_llm, vibe_answer, "reasoning")
+                    v2, vibe_pg_out, vibe_test_code = self._run_playground(vibe_llm, vibe_answer, "reasoning", model_key="vibethinker")
                     if v2:
                         if status_callback:
                             status_callback("Emergency Search Healing SUCCESSFUL!", "success", "vibethinker", 100)
