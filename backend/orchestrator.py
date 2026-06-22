@@ -1632,46 +1632,28 @@ class AgentOrchestrator:
                 viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                 return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
-            # ── Phase 5: Shallow Fix (VibeThinker) ───────────────────────
-            if status_callback:
-                status_callback("VibeThinker fixing code...", "warning", "vibethinker", 72)
-            failed_code = code
-            failed_error = output
-            # Structured error analysis for smarter fixing
-            safe_code = code[:2000] if len(code) > 2000 else code
-            safe_error = output[:800] if len(output) > 800 else output
-            fix_p = (
-                f"The following Python code FAILED with an error.\n\n"
-                f"CODE:\n{safe_code}\n\n"
-                f"ERROR:\n{safe_error}\n\n"
-                f"INSTRUCTIONS:\n"
-                f"1. Identify the exact line and cause of the error\n"
-                f"2. Fix ONLY the bug — do not rewrite unrelated parts\n"
-                f"3. Make sure all imports are present\n"
-                f"4. Test edge cases (division by zero, empty arrays, etc.)\n"
-                f"5. Output the COMPLETE corrected script in ```python``` blocks."
-            )
-            code = Sandbox.extract_code(self._strip_thinking(self._call_model(vibe_llm, fix_p, gen_tokens, gen_temp, system_prompt=coder_sys)))
-            ok, output = self.sandbox.execute(code)
-            if ok:
-                self.memory.save(prompt, code)
-                self.memory.save_mistake(prompt, failed_code, failed_error, code)
-                router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
-
-            # ── Phase 6: Deep Escalation (DeepSeek-R1 — rewrite script) ──
-            if status_callback:
-                status_callback("Deep Escalation: DeepSeek-R1 rewriting...", "warning", "deepseek_r1", 80)
-            ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
-            esc_p = (
-                f"Code failed TWICE. You MUST fix it.\nPlan:\n{compiled_plan[:1500]}\n"
-                f"Code:\n{code[:2000]}\nError:\n{output[:800]}\n"
-                f"Rewrite the ENTIRE script from scratch in ```python```. Think step by step."
-            )
-            esc_resp = self._strip_thinking(self._call_model(ds_llm, esc_p, gen_tokens, gen_temp, system_prompt=coder_sys))
-            if "```" in esc_resp:
-                code = Sandbox.extract_code(esc_resp)
+            # ── Phase 5 & 6: Reflexion Loops (Only run during initial draft, not during Nuclear Reset) ──
+            if reset == 0:
+                # ── Phase 5: Shallow Fix (VibeThinker) ───────────────────────
+                if status_callback:
+                    status_callback("VibeThinker fixing code...", "warning", "vibethinker", 72)
+                failed_code = code
+                failed_error = output
+                # Structured error analysis for smarter fixing
+                safe_code = code[:2000] if len(code) > 2000 else code
+                safe_error = output[:800] if len(output) > 800 else output
+                fix_p = (
+                    f"The following Python code FAILED with an error.\n\n"
+                    f"CODE:\n{safe_code}\n\n"
+                    f"ERROR:\n{safe_error}\n\n"
+                    f"INSTRUCTIONS:\n"
+                    f"1. Identify the exact line and cause of the error\n"
+                    f"2. Fix ONLY the bug — do not rewrite unrelated parts\n"
+                    f"3. Make sure all imports are present\n"
+                    f"4. Test edge cases (division by zero, empty arrays, etc.)\n"
+                    f"5. Output the COMPLETE corrected script in ```python``` blocks."
+                )
+                code = Sandbox.extract_code(self._strip_thinking(self._call_model(vibe_llm, fix_p, gen_tokens, gen_temp, system_prompt=coder_sys)))
                 ok, output = self.sandbox.execute(code)
                 if ok:
                     self.memory.save(prompt, code)
@@ -1679,6 +1661,26 @@ class AgentOrchestrator:
                     router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
                     viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
                     return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
+
+                # ── Phase 6: Deep Escalation (DeepSeek-R1 — rewrite script) ──
+                if status_callback:
+                    status_callback("Deep Escalation: DeepSeek-R1 rewriting...", "warning", "deepseek_r1", 80)
+                ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
+                esc_p = (
+                    f"Code failed TWICE. You MUST fix it.\nPlan:\n{compiled_plan[:1500]}\n"
+                    f"Code:\n{code[:2000]}\nError:\n{output[:800]}\n"
+                    f"Rewrite the ENTIRE script from scratch in ```python```. Think step by step."
+                )
+                esc_resp = self._strip_thinking(self._call_model(ds_llm, esc_p, gen_tokens, gen_temp, system_prompt=coder_sys))
+                if "```" in esc_resp:
+                    code = Sandbox.extract_code(esc_resp)
+                    ok, output = self.sandbox.execute(code)
+                    if ok:
+                        self.memory.save(prompt, code)
+                        self.memory.save_mistake(prompt, failed_code, failed_error, code)
+                        router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                        viz = self._check_3d_gate(prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"### Logic Plan (Verified)\n{compiled_plan}\n\n### Execution Output\n{output}{viz}\n\n### Code\n```python\n{code}\n```"
 
             # ── Phase 7: Nuclear Reset ───────────────────────────────────
             all_errors.append(f"Round {reset+1}: {output[:500]}")
@@ -1803,13 +1805,13 @@ class AgentOrchestrator:
             all_errors = []
 
             for reset in range(max_resets):
-                max_rounds = 2
+                max_rounds = 2 if reset == 0 else 1
                 ds_answer = ""
                 for rnd in range(max_rounds):
                     # Re-acquire ds_llm because VibeThinker may have evicted it in the previous round
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     if status_callback:
-                        lbl = f"Nuclear Reset #{reset} (Attempt {rnd+1}/2): DeepSeek-R1 re-reasoning..." if reset else f"DeepSeek-R1 reasoning + playground (Attempt {rnd+1}/2)..."
+                        lbl = f"Nuclear Reset #{reset} (Attempt {rnd+1}/{max_rounds}): DeepSeek-R1 re-reasoning..." if reset else f"DeepSeek-R1 reasoning + playground (Attempt {rnd+1}/{max_rounds})..."
                         status_callback(lbl, "info" if not reset else "warning", "deepseek_r1", 25 + rnd*12)
                     draft_p = f"Provide a detailed, rigorous answer:\n{ds_safe}"
                     if rnd > 0:
