@@ -1803,13 +1803,13 @@ class AgentOrchestrator:
             all_errors = []
 
             for reset in range(max_resets):
-                max_rounds = 3
+                max_rounds = 2
                 ds_answer = ""
                 for rnd in range(max_rounds):
                     # Re-acquire ds_llm because VibeThinker may have evicted it in the previous round
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     if status_callback:
-                        lbl = f"Nuclear Reset #{reset} (Attempt {rnd+1}/3): DeepSeek-R1 re-reasoning..." if reset else f"DeepSeek-R1 reasoning + playground (Attempt {rnd+1}/3)..."
+                        lbl = f"Nuclear Reset #{reset} (Attempt {rnd+1}/2): DeepSeek-R1 re-reasoning..." if reset else f"DeepSeek-R1 reasoning + playground (Attempt {rnd+1}/2)..."
                         status_callback(lbl, "info" if not reset else "warning", "deepseek_r1", 25 + rnd*12)
                     draft_p = f"Provide a detailed, rigorous answer:\n{ds_safe}"
                     if rnd > 0:
