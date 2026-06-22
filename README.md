@@ -102,6 +102,7 @@ The DMA is a custom memory manager built specifically for running multiple large
 - Auto-detects available RAM and sets a safety threshold (25% of total)
 - Uses **LRU eviction** — evicts the least recently used model when memory is tight
 - Has an **iGPU Unified Memory Guard** that prevents glibc heap corruption when multiple 7B models coexist on Intel iGPUs
+- **Kaggle dGPU Hot-Swap Mode** — On dGPU environments (like the 16GB Kaggle P100 with 32GB RAM), the DMA pre-loads all models into System RAM and aggressively hot-swaps them into the GPU one-by-one, ensuring complex reasoning models get 100% of the VRAM for their KV Cache.
 - Supports **lazy loading** — models load only when the pipeline actually needs them, not all at startup
 
 ### Polyglot Execution Sandbox

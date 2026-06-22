@@ -134,11 +134,21 @@ class AgentOrchestrator:
         # old models *before* a new 5-7 GB model load crashes with OOM.
         # On iGPUs (Intel/AMD shared memory), VRAM = RAM so this doesn't apply.
         self.vram_safety_gb = 2.0
+        self.kaggle_hotswap_mode = False
         if torch and torch.cuda.is_available():
             try:
                 _free, total_vram = torch.cuda.mem_get_info(0)
                 total_vram_gb = total_vram / (1024 ** 3)
                 self.vram_safety_gb = round(total_vram_gb * 0.40, 1)  # 40% reserve
+                
+                # ── Kaggle dGPU Hot-Swap Mode Detection ──
+                # If System RAM is massive (>24GB) but VRAM is restricted (<=16GB)
+                if self.total_ram_gb >= 24 and total_vram_gb <= 16:
+                    ram_percent = psutil.virtual_memory().percent
+                    if ram_percent < 15.0:  # Fresh environment
+                        self.kaggle_hotswap_mode = True
+                        print("🚀 DMA: Activated Kaggle dGPU Hot-Swap Mode! VRAM multiplexing enabled.")
+                        
                 print(f"🎮 DMA: NVIDIA GPU detected — {total_vram_gb:.0f} GB VRAM, "
                       f"evict threshold = {self.vram_safety_gb:.1f} GB free")
             except Exception:
@@ -363,6 +373,28 @@ class AgentOrchestrator:
         # Pass the estimated model size so the DMA evicts enough room for THIS specific model
         est_model_gb = self._estimate_model_size_gb(model_key)
         print(f"📦 DMA: Preparing to load '{model_key}' (~{est_model_gb:.1f} GB)")
+        
+        # ── Kaggle dGPU Hot-Swap Guard ────────────────────────────────────
+        # On Kaggle (16GB VRAM, 32GB RAM), we aggressively flush the GPU of all
+        # other models so the incoming model gets 100% of the VRAM for its KV Cache.
+        if getattr(self, 'kaggle_hotswap_mode', False) and self.loaded_models:
+            models_to_flush = list(self.loaded_models.keys())
+            for mk in models_to_flush:
+                if mk != model_key:
+                    print(f"🔄 DMA (Hot-Swap): Unloading '{mk}' from VRAM to make room...")
+                    model_obj = self.loaded_models.pop(mk, None)
+                    if mk in self.model_access_order:
+                        self.model_access_order.remove(mk)
+                    if hasattr(model_obj, 'close'):
+                        try:
+                            model_obj.close()
+                        except Exception:
+                            pass
+                    del model_obj
+            gc.collect()
+            if torch and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                
         self._check_memory_pressure(required_vram_gb=est_model_gb)
 
         # ── iGPU Unified Memory Guard ─────────────────────────────────────
