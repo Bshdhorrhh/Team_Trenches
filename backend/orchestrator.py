@@ -690,7 +690,7 @@ class AgentOrchestrator:
         if not text:
             return text
             
-        # Handle unclosed <think> tag gracefully without wiping code
+        # Handle unclosed <think> tag gracefully
         if '<think>' in text and '</think>' not in text:
             before_think, after_think = text.split('<think>', 1)
             if '```' in after_think:
@@ -698,7 +698,9 @@ class AgentOrchestrator:
                 after_think = after_think.replace('```', '</think>\n```', 1)
                 text = before_think + '<think>' + after_think
             else:
-                return (before_think + after_think).strip()
+                # If there's no code fence, the think block hit the token limit.
+                # Discard the incomplete thought process.
+                return before_think.strip()
                 
         cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
         

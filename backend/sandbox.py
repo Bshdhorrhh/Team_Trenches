@@ -98,9 +98,10 @@ except Exception:
 
 # ── Step 1.5: Hard Block Network Access ──────────────────────────────────
 import socket
-def block_network(*args, **kwargs):
-    raise PermissionError("Network access is strictly forbidden in the sandbox.")
-socket.socket = block_network
+class BlockedSocket:
+    def __init__(self, *args, **kwargs):
+        raise PermissionError("Network access is strictly forbidden in the sandbox.")
+socket.socket = BlockedSocket
 
 # ── Step 2: Define the Whitelist of Safe Modules ─────────────────────────
 ALLOWED_MODULES = {
@@ -206,8 +207,8 @@ try:
     result["output"] = captured_stdout.getvalue()
     if captured_stderr.getvalue():
         result["output"] += "\nWarnings/Stderr:\n" + captured_stderr.getvalue()
-except ImportError as e:
-    # Module was blocked — signal the caller to retry with unrestricted mode
+except (ImportError, PermissionError) as e:
+    # Module was blocked or network was accessed — signal the caller to retry with unrestricted mode
     result["success"] = False
     result["error"] = str(e)
     result["restricted_block"] = True
