@@ -1006,7 +1006,7 @@ class AgentOrchestrator:
         # Classify the domain of the query
         domain = "general"
         prompt_lower = (original_prompt or "").lower() + " " + (hypothesis or "").lower()
-        if any(kw in prompt_lower for kw in ["biology", "gene", "protein", "dna", "rna", "translation", "transcription", "sequence", "codon", "molecule", "chemical", "bond", "valency", "structure", "chemistry", "atp", "reaction", "formula", "rdkit", "biopython"]):
+        if any(kw in prompt_lower for kw in ["biology", "gene", "protein", "dna", "rna", "translation", "transcription", "sequence", "codon", "molecule", "chemical", "bond", "valency", "structure", "chemistry", "atp", "reaction", "formula", "rdkit", "biopython", "enzyme", "kinetics", "inhibition", "michaelis", "substrate", "inhibitor", "vmax", "metabolic", "catalytic", "pharmacokinetics", "receptor", "ligand"]):
             domain = "bio_chem"
         elif any(kw in prompt_lower for kw in ["physics", "math", "equation", "solve", "drift", "lorentz", "velocity", "trajectory", "integral", "derivative", "differential", "limit", "matrix", "vector", "force", "cycle", "frequency"]):
             domain = "math_physics"
@@ -1032,6 +1032,12 @@ class AgentOrchestrator:
                 "For biology/chemistry queries, you MUST use Bio (Biopython) or rdkit (RDKit) to strictly validate "
                 "molecular weights, codon translation, sequence transcription, or chemical property assertions. "
                 "Do not mock these values; use the actual libraries to compute and verify them."
+            )
+            rules.append(
+                "For enzyme kinetics or pharmacokinetics queries, you MUST verify the DIRECTIONALITY of parameter shifts "
+                "(e.g., in Competitive Inhibition: apparent Km INCREASES while Vmax stays constant; in Uncompetitive: both apparent Km and Vmax decrease). "
+                "Write numerical tests: compute v at [I]=0 and [I]>0 for the same [S], and assert that for Competitive Inhibition "
+                "the velocity DECREASES when inhibitor is added (v_inhibited < v_uninhibited). If this assertion fails, the formula is WRONG."
             )
         elif domain == "cybersecurity":
             rules.append(
@@ -2059,7 +2065,12 @@ class AgentOrchestrator:
             "Do NOT copy the physical system or specific numeric values if they differ from the User Query. Always prioritize the User Query's exact physics system and exact variables.\n"
             "11. THINKING CONSTRAINT: Be concise, structured, and focused in your thinking thoughts. Avoid looping or repeating the "
             "same mathematical derivations. State your reasoning path clearly and proceed directly to the solution once verified.\n"
-            "12. MATHEMATICAL DETAILS: You MUST write out all algebraic equations, derivative steps, and algebraic manipulations in clear LaTeX / Markdown format. If numerical constants or gases are specified, substitute the values and output the final calculated numerical answers."
+            "12. MATHEMATICAL DETAILS: You MUST write out all algebraic equations, derivative steps, and algebraic manipulations in clear LaTeX / Markdown format. If numerical constants or gases are specified, substitute the values and output the final calculated numerical answers.\n"
+            "13. BIOCHEMISTRY FORMULA CORRECTNESS: For enzyme kinetics equations (Michaelis-Menten, Lineweaver-Burk, etc.), "
+            "you MUST verify the DIRECTIONALITY of your derived formula before presenting it. For example: "
+            "in Competitive Inhibition, the apparent Km INCREASES (Km_app = Km * (1 + [I]/Ki)) while Vmax stays the same. "
+            "In Uncompetitive Inhibition, both apparent Km and Vmax DECREASE. In Non-competitive Inhibition, Km stays the same but Vmax decreases. "
+            "Always sanity-check: does adding more inhibitor ([I] > 0) cause the reaction velocity to decrease? If your formula shows velocity increasing with [I], it is WRONG."
         )
 
         if use_playground:
