@@ -1239,51 +1239,52 @@ class AgentOrchestrator:
         if html_extract and ("<html" in html_extract.lower() or "<script" in html_extract.lower()):
             html_valid, html_error = self._verify_html_javascript(html_extract)
 
-        # Reflexion loop for Strategy 1: Max 2 self-fix attempts
-        for attempt in range(2):
-            if html_valid:
-                break
-            if status_callback:
-                status_callback(f"Fixing HTML JS execution error (Round {attempt+1})...", "warning", "opencode", 96)
-            
-            fix_p = (
-                f"Your previously generated HTML/JS code failed JavaScript execution verification.\n\n"
-                f"Failed Code:\n{html_extract}\n\n"
-                f"Error Message:\n{html_error}\n\n"
-                "Please fix it. Common guidelines:\n"
-                "1. If using Three.js, ensure you load OrbitControls correctly, NEVER use non-existent APIs like ArcGeometry (use RingGeometry or TorusGeometry instead), and define all animation variables (like clock/time/frameCount).\n"
-                "2. If using Plotly.js, ensure layout backgrounds are dark, colorscales are explicit, and target elements exist.\n"
-                "3. Ensure the glassmorphic control card contains functional sliders for variables and play/pause/reset buttons that actually update the physics loop dynamically.\n"
-                "4. Ensure there are no JavaScript syntax errors or undefined variables.\n\n"
-                "Output ONLY the complete, corrected HTML page inside ```html``` blocks."
-            )
-            html_fixed = self._call_model(
-                coder_llm, 
-                fix_p, 
-                max_tokens=gen_tokens, 
-                temperature=gen_temp,
-                system_prompt=(
-                    "You are an expert JavaScript, WebGL, Three.js, and Plotly.js coder.\n"
-                    "Identify and repair the specific ReferenceError, TypeError, or SyntaxError reported in the error message.\n"
-                    "Ensure all state variables are in the global scope, OrbitControls has both arguments, and no non-existent geometry builders are used.\n"
-                    "Output ONLY the complete, corrected HTML page inside ```html``` blocks."
-                )
-            )
-            fixed_extract = Sandbox.extract_code(html_fixed)
-            if fixed_extract:
-                html_extract = fixed_extract
-                html_valid, html_error = self._verify_html_javascript(html_extract)
-            else:
-                html_valid = False
-                html_error = "No code block found in response."
-
-        # Suggestion A: Bypass verification if Node is missing or if it's a browser-environment mock error
+        # Pre-check: Bypass verification immediately if Node is missing or if it's a browser-environment mock error
         bypass_verification = False
-        if html_extract:
+        if html_error:
             is_node_missing = any(kw in html_error.lower() for kw in ["node", "runtime not found", "executable not found", "command not found"])
             is_mock_error = any(kw in html_error.lower() for kw in ["canvas", "webgl", "document is not defined", "window is not defined"])
             if is_node_missing or is_mock_error:
                 bypass_verification = True
+
+        if not bypass_verification:
+            # Reflexion loop for Strategy 1: Max 2 self-fix attempts
+            for attempt in range(2):
+                if html_valid:
+                    break
+                if status_callback:
+                    status_callback(f"Fixing HTML JS execution error (Round {attempt+1})...", "warning", "opencode", 96)
+                
+                fix_p = (
+                    f"Your previously generated HTML/JS code failed JavaScript execution verification.\n\n"
+                    f"Failed Code:\n{html_extract}\n\n"
+                    f"Error Message:\n{html_error}\n\n"
+                    "Please fix it. Common guidelines:\n"
+                    "1. If using Three.js, ensure you load OrbitControls correctly, NEVER use non-existent APIs like ArcGeometry (use RingGeometry or TorusGeometry instead), and define all animation variables (like clock/time/frameCount).\n"
+                    "2. If using Plotly.js, ensure layout backgrounds are dark, colorscales are explicit, and target elements exist.\n"
+                    "3. Ensure the glassmorphic control card contains functional sliders for variables and play/pause/reset buttons that actually update the physics loop dynamically.\n"
+                    "4. Ensure there are no JavaScript syntax errors or undefined variables.\n\n"
+                    "Output ONLY the complete, corrected HTML page inside ```html``` blocks."
+                )
+                html_fixed = self._call_model(
+                    coder_llm, 
+                    fix_p, 
+                    max_tokens=gen_tokens, 
+                    temperature=gen_temp,
+                    system_prompt=(
+                        "You are an expert JavaScript, WebGL, Three.js, and Plotly.js coder.\n"
+                        "Identify and repair the specific ReferenceError, TypeError, or SyntaxError reported in the error message.\n"
+                        "Ensure all state variables are in the global scope, OrbitControls has both arguments, and no non-existent geometry builders are used.\n"
+                        "Output ONLY the complete, corrected HTML page inside ```html``` blocks."
+                    )
+                )
+                fixed_extract = Sandbox.extract_code(html_fixed)
+                if fixed_extract:
+                    html_extract = fixed_extract
+                    html_valid, html_error = self._verify_html_javascript(html_extract)
+                else:
+                    html_valid = False
+                    html_error = "No code block found in response."
 
         if (html_valid or bypass_verification) and html_extract:
             warning_msg = ""
