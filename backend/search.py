@@ -97,12 +97,13 @@ class WebSearch:
         """
         try:
             import warnings
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            # Try new package name first, fall back to old one
-            try:
-                from ddgs import DDGS
-            except ImportError:
-                from duckduckgo_search import DDGS
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                # Try new package name first, fall back to old one
+                try:
+                    from ddgs import DDGS
+                except ImportError:
+                    from duckduckgo_search import DDGS
             with DDGS() as ddgs:
                 results = []
                 for r in ddgs.text(query, max_results=max_results):

@@ -10,7 +10,7 @@ accelerate==0.27.2
 chromadb==0.4.24
 numpy==1.26.4
 beautifulsoup4==4.12.3
-duckduckgo-search>=5.2.2
+ddgs>=6.0.0
 sympy>=1.12
 scipy>=1.11.0
 pint>=0.23
