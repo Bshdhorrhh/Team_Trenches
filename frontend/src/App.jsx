@@ -19,6 +19,106 @@ const useKatexReady = () => {
 };
 
 /* ═══════════════════════════════════════════════════
+   PREDICTIVE METRICS COMPONENT
+   ═══════════════════════════════════════════════════ */
+const PredictiveMetricsCard = ({ jsonStr }) => {
+  const [data, setData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      setData(parsed);
+    } catch (err) {
+      console.error("Error parsing predictive metrics JSON:", err);
+      setErrorMsg("Failed to parse predictive metrics.");
+    }
+  }, [jsonStr]);
+
+  if (errorMsg) {
+    return (
+      <div className="error-card" style={{ padding: "12px", background: "rgba(220,53,69,0.1)", border: "1px solid rgba(220,53,69,0.3)", borderRadius: "8px", color: "#f8d7da", margin: "8px 0" }}>
+        {errorMsg}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { metric_name, metric_value, forecast, dates } = data;
+
+  return (
+    <div className="predictive-metrics-card" style={{
+      background: "rgba(30, 30, 30, 0.45)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      borderRadius: "12px",
+      padding: "20px",
+      margin: "16px 0",
+      color: "#fff",
+      boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.2)"
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <h4 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "600", color: "#64ffda", textTransform: "uppercase", letterSpacing: "1px" }}>
+          🔮 Forecasting & Prediction Report
+        </h4>
+        <div style={{
+          background: "rgba(100, 255, 218, 0.1)",
+          color: "#64ffda",
+          padding: "4px 10px",
+          borderRadius: "20px",
+          fontSize: "0.85rem",
+          fontWeight: "500",
+          border: "1px solid rgba(100, 255, 218, 0.2)"
+        }}>
+          API Verified
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+        <div style={{ background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ fontSize: "0.85rem", color: "#b0b0b0", textTransform: "capitalize" }}>Target Metric</div>
+          <div style={{ fontSize: "1.1rem", fontWeight: "600", marginTop: "4px" }}>{metric_name || "Accuracy"}</div>
+        </div>
+        <div style={{ background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ fontSize: "0.85rem", color: "#b0b0b0" }}>Model Score</div>
+          <div style={{ fontSize: "1.3rem", fontWeight: "700", marginTop: "4px", color: typeof metric_value === 'number' && metric_value > 0.8 ? "#4caf50" : "#ffeb3b" }}>
+            {typeof metric_value === 'number' ? metric_value.toFixed(4) : metric_value || "N/A"}
+          </div>
+        </div>
+      </div>
+
+      {forecast && forecast.length > 0 && (
+        <div>
+          <div style={{ fontSize: "0.9rem", fontWeight: "600", marginBottom: "8px", color: "#b0b0b0" }}>Future Predictions:</div>
+          <div style={{ maxHeight: "150px", overflowY: "auto", background: "rgba(0,0,0,0.2)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.04)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", color: "#888" }}>
+                  <th style={{ padding: "8px 12px" }}>Time/Step</th>
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Forecast Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecast.map((val, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
+                    <td style={{ padding: "8px 12px", color: "#ddd" }}>{dates && dates[idx] ? dates[idx] : `Step +${idx + 1}`}</td>
+                    <td style={{ padding: "8px 12px", textAlign: "right", color: "#64ffda", fontWeight: "500" }}>
+                      {typeof val === 'number' ? val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : val}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
    PLOTLY 3D CHART COMPONENT
    ═══════════════════════════════════════════════════ */
 const PlotlyChart = ({ jsonStr }) => {
@@ -483,12 +583,21 @@ const MessageRenderer = ({ text }) => {
 
   if (!text) return null;
 
-  // Split on both Plotly JSON blocks and HTML Artifact blocks
-  const specialParts = text.split(/(<!--PLOTLY_JSON-->[\s\S]*?<!--\/PLOTLY_JSON-->|<!--ARTIFACT_HTML-->[\s\S]*?<!--\/ARTIFACT_HTML-->)/g);
+  // Split on both Plotly JSON blocks, HTML Artifact blocks, and PREDICTIVE_METRICS blocks
+  const specialParts = text.split(/(<!--PLOTLY_JSON-->[\s\S]*?<!--\/PLOTLY_JSON-->|<!--ARTIFACT_HTML-->[\s\S]*?<!--\/ARTIFACT_HTML-->|=== PREDICTIVE_METRICS ===[\s\S]*?==========================)/g);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
       {specialParts.map((segment, si) => {
+        // Render Predictive Metrics block
+        if (segment.startsWith("=== PREDICTIVE_METRICS ===")) {
+          const jsonStr = segment
+            .replace("=== PREDICTIVE_METRICS ===", "")
+            .replace("==========================", "")
+            .trim();
+          return <PredictiveMetricsCard key={`predictive-${si}`} jsonStr={jsonStr} />;
+        }
+
         // Render Plotly chart if this segment is a PLOTLY_JSON block
         if (segment.startsWith("<!--PLOTLY_JSON-->")) {
           const jsonStr = segment
