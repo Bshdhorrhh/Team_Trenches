@@ -1010,6 +1010,8 @@ class AgentOrchestrator:
             domain = "bio_chem"
         elif any(kw in prompt_lower for kw in ["physics", "math", "equation", "solve", "drift", "lorentz", "velocity", "trajectory", "integral", "derivative", "differential", "limit", "matrix", "vector", "force", "cycle", "frequency"]):
             domain = "math_physics"
+        elif purpose == "logic" and any(kw in prompt_lower for kw in ["cybersecurity", "security", "cryptography", "crypto", "cipher", "aes", "rsa", "encryption", "decryption", "hash", "sha256", "jwt", "packet", "scapy", "socket", "steganography", "payload", "vulnerability"]):
+            domain = "cybersecurity"
 
         rules = [
             "Test the CORE claim/formula with concrete numerical values",
@@ -1030,6 +1032,13 @@ class AgentOrchestrator:
                 "For biology/chemistry queries, you MUST use Bio (Biopython) or rdkit (RDKit) to strictly validate "
                 "molecular weights, codon translation, sequence transcription, or chemical property assertions. "
                 "Do not mock these values; use the actual libraries to compute and verify them."
+            )
+        elif domain == "cybersecurity":
+            rules.append(
+                "For cybersecurity and cryptography coding, you MUST write test assertions to verify "
+                "that the roundtrip encryption and decryption matches the exact original plaintext, "
+                "or that generated security tokens/keys validate successfully using standard cryptographic "
+                "libraries (like cryptography, hashlib, or jwt). If simulating packets, verify header structures."
             )
 
         rules.extend([
@@ -1728,6 +1737,11 @@ class AgentOrchestrator:
             "          'dates': ['2026-06-24', '2026-06-25', '2026-06-26']\n"
             "      }))\n"
             "      print('==========================')\n\n"
+            "12. CYBERSECURITY, CRYPTOGRAPHY & NETWORK TASKS:\n"
+            "    - You can import `cryptography` (e.g. Fernet, AES, RSA, padding, hashes), `scapy` (for packet crafting/sniffing simulation), `jwt` (or `pyjwt`), and `hashlib` / `hmac`.\n"
+            "    - If you are writing an encryption or token task, you MUST write automated validation in the script to verify that ciphertext can be decrypted back to the original plaintext, and that signatures/tokens verify correctly.\n"
+            "    - Always use safe key generation and modern secure cryptographic parameters (e.g. key lengths >= 256 bits for AES, >= 2048 bits for RSA, SHA-256 or better for hashing).\n"
+            "    - For network protocol tasks, use scapy to simulate packet creation, validation of header offsets, and printing raw hex/dissections of packets. Do NOT try to connect to external ports or services; simulate them.\n\n"
             "=== PLOTLY 3D CHEAT SHEET ===\n"
             "import plotly.graph_objects as go\n"
             "fig = go.Figure(data=[go.Scatter3d(x=X, y=Y, z=Z, mode='lines', line=dict(color='cyan', width=2))])\n"

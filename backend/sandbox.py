@@ -155,6 +155,8 @@ ALLOWED_MODULES = {
     'Bio', 'rdkit',
     # Quantum Physics & Rocket Dynamics
     'rocketpy', 'qiskit', 'qutip',
+    # Cybersecurity & Cryptography / Network Simulation
+    'cryptography', 'scapy', 'jwt', 'pyjwt',
     # Web & API requests (for real-time weather and stock prediction data)
     'requests', 'urllib', 'http',
 }
