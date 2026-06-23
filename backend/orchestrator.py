@@ -595,10 +595,18 @@ class AgentOrchestrator:
             elif self.dual_gpu_pipeline:
                 kwargs["main_gpu"] = 0
 
-            llm = Llama(**kwargs)
+            try:
+                llm = Llama(**kwargs)
+            except Exception as e:
+                print(f"⚠️ DMA: Failed to create llama_context on GPU for '{model_key}' ({e}). Falling back to CPU...")
+                kwargs["n_gpu_layers"] = 0
+                kwargs.pop("main_gpu", None)
+                llm = Llama(**kwargs)
+
             self.loaded_models[model_key] = llm
             self._touch_model(model_key)
-            print(f"✅ Loaded GGUF model '{model_key}' ({os.path.basename(model_path)})")
+            print(f"✅ Loaded GGUF model '{model_key}' ({os.path.basename(model_path)})" + 
+                  (" (CPU Fallback)" if kwargs.get("n_gpu_layers") == 0 and self.device_mode != "cpu" else ""))
             return llm
             
         # ── Safetensors / Transformers Models ────────────────────────────
