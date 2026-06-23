@@ -977,7 +977,15 @@ class AgentOrchestrator:
 
     def _is_playground_applicable(self, router_llm, prompt):
         """Check if reasoning can be verified via Python sandbox."""
-        auto_keywords = ["solve", "calculate", "equations of motion", "scipy", "numpy", "solve_ivp", "assert", "integrate", "trajectory", "physics", "math", "verify", "verification script"]
+        auto_keywords = [
+            "solve", "calculate", "equations of motion", "scipy", "numpy", "solve_ivp", "assert",
+            "integrate", "trajectory", "physics", "math", "verify", "verification script",
+            # Bio/Chem
+            "enzyme", "kinetics", "michaelis", "inhibition", "reaction rate", "molecular weight",
+            "codon", "transcription", "translation", "protein", "dna", "rna",
+            # Cybersecurity
+            "encrypt", "decrypt", "cipher", "hash", "aes", "rsa", "jwt",
+        ]
         prompt_lower = prompt.lower()
         if any(kw in prompt_lower for kw in auto_keywords):
             return True
