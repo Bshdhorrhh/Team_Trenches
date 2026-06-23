@@ -1512,8 +1512,17 @@ class AgentOrchestrator:
         if getattr(self, 'kaggle_hotswap_mode', False):
             print(f"📐 DMA (EVM Context Sizing): router_ctx={router_ctx}, ds_ctx={ds_ctx}, oc_ctx={oc_ctx}")
 
-        # gen_tokens must leave room for the prompt inside the context window
-        gen_tokens = 4096
+        # Dynamically scale gen_tokens based on safe context capacity (RAM/VRAM-aware).
+        # We allocate up to 40% of the active context for generation, capped between 2048 and 8192 tokens.
+        # This prevents truncation on large GPUs/RAM setups while avoiding prompt starvation on low setups.
+        min_ctx = min(ds_ctx, oc_ctx)
+        gen_tokens = int(min_ctx * 0.40)
+        gen_tokens = max(2048, min(8192, gen_tokens))
+        # Ensure the prompt always has at least 1500 tokens of headroom
+        if min_ctx - gen_tokens < 1500:
+            gen_tokens = max(1024, min_ctx - 1500)
+            
+        print(f"📐 DMA Generation Sizing: gen_tokens={gen_tokens} (active context base: {min_ctx} tokens)")
         
         # Adaptive Temperature Scaling
         logic_temp = 0.6  # High for creative logic problem solving
