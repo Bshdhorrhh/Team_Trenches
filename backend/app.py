@@ -5,6 +5,9 @@ os.environ["SYCL_DEVICE_FILTER"] = "level_zero"
 os.environ["SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS"] = "1"
 os.environ["IPEX_OPTIMIZE_TRANSFORMERS"] = "1"
 import sys
+# Add root folder to sys.path to resolve backend package imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import threading
 import json
 import asyncio
@@ -17,10 +20,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, List
 from backend.memory import Memory
-
-# Add root folder to sys.path to resolve backend package imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from backend.downloader import check_models_status, download_model, MODEL_DEFINITIONS
 from backend.orchestrator import AgentOrchestrator
 
