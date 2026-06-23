@@ -1499,8 +1499,13 @@ class AgentOrchestrator:
             status_callback("Phi-3.5-Mini checking intent...", "info", "router", 5)
 
         # ── Web Search Enrichment ────────────────────────────────────────
+        # Auto-enable search if user query explicitly asks for web search
+        search_keywords = ["search the web", "search online", "search for", "google for", "latest news", "current price of", "what is the price of", "stock price of", "weather in", "recent news"]
+        prompt_lower = prompt.lower()
+        active_web_search = self.enable_web_search or any(kw in prompt_lower for kw in search_keywords)
+
         web_context = ""
-        if self.enable_web_search:
+        if active_web_search:
             if status_callback:
                 status_callback("Optimizing Search Query...", "info", "router", 6)
             try:
@@ -1525,13 +1530,20 @@ class AgentOrchestrator:
                 
                 results = self.web_search.search(search_query, max_results=3)
                 
-                # 2. Deep Page Scraping (Iterate through results to find a scrapeable page)
-                scraped_link = None
-                full_page_text = ""
+                # 2. Compile Snippets Block & Scrape top pages
+                snippets_list = []
+                scraped_pages = []
+                scraped_count = 0
+                
                 if results:
-                    for r in results:
-                        link = r.get('link', '')
-                        if link:
+                    for idx, r in enumerate(results):
+                        title = r.get("title", "")
+                        link = r.get("link", "")
+                        snippet = r.get("snippet", "")
+                        snippets_list.append(f"[{idx+1}] Title: {title}\nURL: {link}\nSnippet: {snippet}")
+                        
+                        # Try to scrape the page content if we haven't reached the limit
+                        if scraped_count < 2 and link:
                             # Skip Google News index pages to avoid scraping massive, noisy, cross-mixed aggregates
                             if "news.google.com" in link.lower() and ("/topics/" in link.lower() or "/stories/" in link.lower() or "/publications/" in link.lower()):
                                 continue
@@ -1540,25 +1552,24 @@ class AgentOrchestrator:
                                 status_callback(f"Scraping: {link[:40]}...", "info", "router", 12)
                             
                             text = self.web_search.scrape_url(link)
-                            if text and len(text.strip()) > 200:  # Ensure it has substantial content
-                                full_page_text = text
-                                scraped_link = link
-                                break
-                                
-                if full_page_text and scraped_link:
-                    web_context = (
-                        f"=== START SCRAPED WEB PAGE ===\n"
-                        f"URL: {scraped_link}\n"
-                        f"Page Content:\n{full_page_text}\n"
-                        f"=== END SCRAPED WEB PAGE ===\n\n"
-                    )
+                            if text and len(text.strip()) > 200:
+                                scraped_pages.append(
+                                    f"=== START SCRAPED PAGE ===\nURL: {link}\nContent:\n{text[:8000]}\n=== END SCRAPED PAGE ==="
+                                )
+                                scraped_count += 1
+                
+                # Assemble combined web context block
+                snippets_block = "Search Result Snippets:\n" + "\n\n".join(snippets_list) if snippets_list else "No search results returned."
+                scraped_block = "\n\n".join(scraped_pages) if scraped_pages else "No pages could be deep-scraped (Cloudflare blocking or empty content)."
+                
+                web_context = (
+                    f"=== WEB SEARCH RESULTS ===\n"
+                    f"{snippets_block}\n\n"
+                    f"=== DEEP SCRAPED DETAILS ===\n"
+                    f"{scraped_block}\n"
+                    f"===========================\n"
+                )
                     
-                # Add snippets for all search results to provide a comprehensive baseline
-                if results:
-                    snippets = "\n".join([f"- Title: {r.get('title')}\n  Snippet: {r.get('snippet', '')}\n  Link: {r.get('link', '')}" for r in results])
-                    if snippets:
-                        web_context += f"=== START OTHER SEARCH SNIPPETS ===\n{snippets}\n=== END OTHER SEARCH SNIPPETS ===\n"
-
             except Exception as e:
                 print(f"Web search enrichment failed: {e}")
                 web_context = ""
