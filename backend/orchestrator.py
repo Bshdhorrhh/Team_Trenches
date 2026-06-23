@@ -1282,7 +1282,8 @@ class AgentOrchestrator:
             "6. Make sure to use only VALID Three.js/Plotly.js APIs. Timing rule: instantiate new THREE.OrbitControls(camera, renderer.domElement) ONLY AFTER both the camera and WebGL renderer are fully initialized and the renderer canvas is appended. NEVER use non-existent APIs like ArcGeometry (use RingGeometry, TorusGeometry, or custom BufferGeometry curves for paths).\n"
             "7. Define all animation variables (like clock/time/frameCount) at the top of your script scope so they are never undefined.\n"
             "8. IMPORTANT: The topic description below might contain Python instructions or python code fragments. You MUST translate all math solving, array operations, and plotting logic into pure JavaScript inside the HTML page. Do NOT write Python code, do NOT output Python code blocks, and do NOT refuse this request. Simply write the complete simulation in HTML/JS.\n"
-            "9. Output the COMPLETE HTML page inside ```html``` blocks.\n\n"
+            "9. Output the COMPLETE HTML page inside ```html``` blocks.\n"
+            "10. SINGULARITY SAFETY: For equations with asymptotes or division-by-zero regions (like (V - b) in the van der Waals equation where V must be > b), you MUST ensure the swept ranges are strictly bounded outside the singular boundary (e.g., start V sweep range at 1.15 * b or higher). Never calculate division-by-zero, square roots of negative values, or log of non-positive numbers which produce NaN or Infinity values, as this will crash the WebGL/Plotly.js rendering context.\n\n"
             f"Topic: {compiled_plan[:3000]}"
         )
         html_code = self._call_model(
@@ -2024,9 +2025,10 @@ class AgentOrchestrator:
             "8. Complete ALL derivations fully — do not skip steps or say 'it can be shown that'.\n"
             "9. If uncertain about a specific value or fact, say so explicitly rather than guessing.\n"
             "10. IMPORTANT: If 'Relevant past experience' or 'Web Context' is provided, use it ONLY for structure, formulas, or syntax logic. "
-            "Do NOT copy the physical system or specific numeric values if they differ from the User Query (e.g., if the user asks for a proton in E and B fields, do NOT solve the Lorenz Attractor described in the context). Always prioritize the User Query's exact physics system and exact variables.\n"
+            "Do NOT copy the physical system or specific numeric values if they differ from the User Query. Always prioritize the User Query's exact physics system and exact variables.\n"
             "11. THINKING CONSTRAINT: Be concise, structured, and focused in your thinking thoughts. Avoid looping or repeating the "
-            "same mathematical derivations. State your reasoning path clearly and proceed directly to the solution once verified."
+            "same mathematical derivations. State your reasoning path clearly and proceed directly to the solution once verified.\n"
+            "12. MATHEMATICAL DETAILS: You MUST write out all algebraic equations, derivative steps, and algebraic manipulations in clear LaTeX / Markdown format. If numerical constants or gases are specified, substitute the values and output the final calculated numerical answers."
         )
 
         if use_playground:
