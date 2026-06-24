@@ -931,6 +931,13 @@ class AgentOrchestrator:
         prompt_clean = prompt.strip().lower()
         prompt_lower = prompt_clean
 
+        # ── 0. Fast-track Scientific Derivation/Proof to REASONING ─────────────
+        reasoning_triggers = ["derive", "prove", "equations of motion", "mathematically derive", "mathematical derivation", "theorem", "physical significance"]
+        coding_triggers = ["code", "script", "program", "write a", "implement a", "compile", "develop", "web app", "website", "scipy", "pandas", "numpy", "matplotlib", "plotly", "dataframe", "python"]
+        if any(trigger in prompt_lower for trigger in reasoning_triggers):
+            if not any(coding in prompt_lower for coding in coding_triggers):
+                return "REASONING"
+
         # ── 1. Fast-track Code Block / Traceback presence (Direct CODING) ──────
         if "```" in prompt or "traceback (most recent call)" in prompt_lower or "line " in prompt_lower and "in <module>" in prompt_lower:
             return "CODING"
