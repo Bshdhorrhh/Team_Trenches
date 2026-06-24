@@ -949,6 +949,17 @@ class AgentOrchestrator:
         if re.match(r"^[0-9+\-*/%().\s]+$", arithmetic_clean) and len(arithmetic_clean) > 0:
             return "SIMPLE"
 
+        # 4. Fast-track current-events / recency queries to SIMPLE (they need web search, not reasoning)
+        recency_keywords = ["who won", "who lost", "last match", "latest match", "recent match", "score of", "latest score",
+                            "yesterday", "today's", "todays", "tonight", "last night", "this week", "this month",
+                            "latest news", "recent news", "breaking news", "current", "right now",
+                            "trending", "who is the president", "who is the pm", "who is the ceo",
+                            "weather today", "weather in", "temperature in", "stock price", "crypto price",
+                            "box office", "release date", "when is", "when does", "when did",
+                            "election result", "who won the", "match result", "ipl", "world cup"]
+        if any(kw in prompt_clean for kw in recency_keywords):
+            return "SIMPLE"
+
         p = (
             "Classify this query into EXACTLY ONE category. Reply with ONLY the category name.\n\n"
             "SIMPLE — Quick factual answers, greetings, definitions, translations, yes/no questions, fetching latest news/weather/facts.\n"
@@ -1422,8 +1433,12 @@ class AgentOrchestrator:
         success, output = self.sandbox.execute(full_test_code, language='javascript')
         return success, output
 
+    def _generate_3d_now(self, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
+        """Actually generate the 3D visualization (called on user demand)."""
+        return self._execute_3d_generation(compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+
     def _check_3d_gate(self, prompt, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
-        """Check if the task needs 3D visualization and generate it if so."""
+        """Check if the task could benefit from 3D visualization and suggest it to the user."""
         if status_callback:
             status_callback("Checking 3D Visualization Eligibility...", "info", "router", 90)
 
@@ -1449,6 +1464,21 @@ class AgentOrchestrator:
         if not is_3d_flag:
             return ""
 
+        # Check if the user EXPLICITLY asked for a 3D visualization/plot/graph in their prompt
+        explicit_3d_keywords = ["3d", "plot", "graph", "surface plot", "visualize", "visualization", "simulate", "simulation",
+                                "trajectory", "vector field", "dna helix", "dna structure", "protein structure",
+                                "molecular model", "double helix", "three.js", "plotly"]
+        user_explicitly_asked_3d = any(kw in prompt_lower for kw in explicit_3d_keywords)
+
+        if user_explicitly_asked_3d:
+            # Auto-generate if user explicitly asked for a visualization
+            return self._execute_3d_generation(compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+        else:
+            # Offer the user the option to generate 3D
+            return "\n\n---\n🎨 **3D Visualization Available** — I can generate an interactive 3D visualization for this response. Type **\"generate 3d\"** to create one."
+
+    def _execute_3d_generation(self, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
+        """Execute the actual 3D visualization generation (HTML + Plotly fallback)."""
         coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
 
         # ── Strategy 1: HTML/JS Artifact (frontend iframe sandbox) ────────
@@ -1709,12 +1739,41 @@ class AgentOrchestrator:
     # MAIN PIPELINE ENTRY POINT
     # =========================================================================
     def process_query(self, prompt, mode="auto", selected_models=None, status_callback=None):
+        # ── Handle "generate 3d" follow-up command ──────────────────────
+        prompt_lower_check = prompt.strip().lower()
+        generate_3d_triggers = ["generate 3d", "create 3d", "yes generate 3d", "yes create 3d", "show 3d", "yes 3d", "make 3d"]
+        if any(prompt_lower_check == trig or prompt_lower_check.startswith(trig) for trig in generate_3d_triggers):
+            if status_callback:
+                status_callback("Generating 3D Visualization from last response...", "info", "opencode", 10)
+            # Retrieve the last successful answer from memory to use as context
+            last_context = self.memory.recall(prompt_lower_check, n_results=1)
+            if not last_context:
+                last_context = "No previous context found. Generate a generic 3D demo visualization."
+            router_ctx = self._get_dynamic_context_ceiling("router")
+            oc_ctx = self._get_dynamic_context_ceiling("opencode")
+            gen_tokens = 4096
+            gen_temp = 0.1
+            viz = self._generate_3d_now(last_context, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+            if viz:
+                return viz
+            return "Could not generate a 3D visualization. Please try rephrasing your request."
+
         if status_callback:
             status_callback("Phi-3.5-Mini checking intent...", "info", "router", 5)
 
         # ── Web Search Enrichment ────────────────────────────────────────
         # Auto-enable search if user query explicitly asks for web search
-        search_keywords = ["search the web", "search online", "search for", "google for", "latest news", "current price of", "what is the price of", "stock price of", "weather in", "recent news"]
+        search_keywords = [
+            "search the web", "search online", "search for", "google for",
+            "latest news", "recent news", "breaking news", "current price of",
+            "what is the price of", "stock price of", "weather in", "weather today",
+            "who won", "who lost", "last match", "latest match", "recent match",
+            "score of", "match result", "election result", "box office",
+            "release date", "when is", "when does", "when did",
+            "yesterday", "today's", "todays", "tonight", "last night",
+            "this week", "trending", "right now", "ipl", "world cup",
+            "crypto price", "stock price", "temperature in"
+        ]
         prompt_lower = prompt.lower()
         active_web_search = self.enable_web_search or any(kw in prompt_lower for kw in search_keywords)
 
