@@ -576,6 +576,59 @@ const parseAndRenderSegment = (segment) => {
   });
 };
 
+const splitSpecialSegments = (text) => {
+  const segments = [];
+  let currentPos = 0;
+  
+  while (currentPos < text.length) {
+    const plotlyIdx = text.indexOf("<!--PLOTLY_JSON-->", currentPos);
+    const htmlIdx = text.indexOf("<!--ARTIFACT_HTML-->", currentPos);
+    const metricsIdx = text.indexOf("=== PREDICTIVE_METRICS ===", currentPos);
+    
+    let earliestIdx = -1;
+    let tagType = null;
+    let openTag = "";
+    let closeTag = "";
+    
+    const candidates = [
+      { idx: plotlyIdx, type: "plotly", open: "<!--PLOTLY_JSON-->", close: "<!--/PLOTLY_JSON-->" },
+      { idx: htmlIdx, type: "html", open: "<!--ARTIFACT_HTML-->", close: "<!--/ARTIFACT_HTML-->" },
+      { idx: metricsIdx, type: "metrics", open: "=== PREDICTIVE_METRICS ===", close: "==========================" }
+    ].filter(c => c.idx !== -1);
+    
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.idx - b.idx);
+      earliestIdx = candidates[0].idx;
+      tagType = candidates[0].type;
+      openTag = candidates[0].open;
+      closeTag = candidates[0].close;
+    }
+    
+    if (earliestIdx === -1) {
+      segments.push({ type: "text", content: text.substring(currentPos) });
+      break;
+    }
+    
+    if (earliestIdx > currentPos) {
+      segments.push({ type: "text", content: text.substring(currentPos, earliestIdx) });
+    }
+    
+    const startOfData = earliestIdx + openTag.length;
+    const closeIdx = text.indexOf(closeTag, startOfData);
+    
+    if (closeIdx !== -1) {
+      const content = text.substring(startOfData, closeIdx);
+      segments.push({ type: tagType, content: content, closed: true });
+      currentPos = closeIdx + closeTag.length;
+    } else {
+      const content = text.substring(startOfData);
+      segments.push({ type: tagType, content: content, closed: false });
+      currentPos = text.length;
+    }
+  }
+  return segments;
+};
+
 const MessageRenderer = ({ text }) => {
   // Subscribe to KaTeX load event — triggers re-render when KaTeX finishes loading
   // eslint-disable-next-line no-unused-vars
@@ -583,41 +636,86 @@ const MessageRenderer = ({ text }) => {
 
   if (!text) return null;
 
-  // Split on both Plotly JSON blocks, HTML Artifact blocks, and PREDICTIVE_METRICS blocks
-  const specialParts = text.split(/(<!--PLOTLY_JSON-->[\s\S]*?<!--\/PLOTLY_JSON-->|<!--ARTIFACT_HTML-->[\s\S]*?<!--\/ARTIFACT_HTML-->|=== PREDICTIVE_METRICS ===[\s\S]*?==========================)/g);
+  const segments = splitSpecialSegments(text);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-      {specialParts.map((segment, si) => {
-        // Render Predictive Metrics block
-        if (segment.startsWith("=== PREDICTIVE_METRICS ===")) {
-          const jsonStr = segment
-            .replace("=== PREDICTIVE_METRICS ===", "")
-            .replace("==========================", "")
-            .trim();
+      {segments.map((segment, si) => {
+        if (segment.type === "metrics") {
+          const jsonStr = segment.content.trim();
           return <PredictiveMetricsCard key={`predictive-${si}`} jsonStr={jsonStr} />;
         }
 
-        // Render Plotly chart if this segment is a PLOTLY_JSON block
-        if (segment.startsWith("<!--PLOTLY_JSON-->")) {
-          const jsonStr = segment
-            .replace("<!--PLOTLY_JSON-->", "")
-            .replace("<!--/PLOTLY_JSON-->", "")
-            .trim();
-          return <PlotlyChart key={`plotly-${si}`} jsonStr={jsonStr} />;
+        if (segment.type === "plotly") {
+          if (!segment.closed) {
+            return (
+              <div 
+                key={`plotly-${si}`} 
+                className="plotly-chart-container loading-state" 
+                style={{ 
+                  padding: "30px", 
+                  textAlign: "center", 
+                  background: "rgba(30, 30, 30, 0.4)", 
+                  borderRadius: "12px", 
+                  border: "1px solid rgba(255,255,255,0.05)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px"
+                }}
+              >
+                <div style={{
+                  width: "12px",
+                  height: "12px",
+                  background: "#00d2ff",
+                  borderRadius: "50%",
+                  boxShadow: "0 0 8px #00d2ff",
+                  animation: "artifactPulse 2s ease-in-out infinite"
+                }}></div>
+                <span style={{ fontSize: "14px", color: "#aaa" }}>Generating interactive 3D Plotly chart...</span>
+              </div>
+            );
+          }
+          return <PlotlyChart key={`plotly-${si}`} jsonStr={segment.content.trim()} />;
         }
 
-        // Render HTML Artifact in secure iframe sandbox
-        if (segment.startsWith("<!--ARTIFACT_HTML-->")) {
-          const htmlCode = segment
-            .replace("<!--ARTIFACT_HTML-->", "")
-            .replace("<!--/ARTIFACT_HTML-->", "")
-            .trim();
-          return <ArtifactSandbox key={`artifact-${si}`} htmlCode={htmlCode} />;
+        if (segment.type === "html") {
+          if (!segment.closed) {
+            return (
+              <div 
+                key={`artifact-${si}`} 
+                className="plotly-chart-container loading-state" 
+                style={{ 
+                  padding: "30px", 
+                  textAlign: "center", 
+                  background: "rgba(30, 30, 30, 0.4)", 
+                  borderRadius: "12px", 
+                  border: "1px solid rgba(255,255,255,0.05)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px"
+                }}
+              >
+                <div style={{
+                  width: "12px",
+                  height: "12px",
+                  background: "#ab47bc",
+                  borderRadius: "50%",
+                  boxShadow: "0 0 8px #ab47bc",
+                  animation: "artifactPulse 2s ease-in-out infinite"
+                }}></div>
+                <span style={{ fontSize: "14px", color: "#aaa" }}>Building 3D simulation sandbox...</span>
+              </div>
+            );
+          }
+          return <ArtifactSandbox key={`artifact-${si}`} htmlCode={segment.content.trim()} />;
         }
 
-        // Otherwise render as markdown with code blocks
-        const parts = segment.split(/(```[\s\S]*?```)/g);
+        // Render as markdown with code blocks for "text" segment type
+        const parts = segment.content.split(/(```[\s\S]*?```)/g);
         return (
           <React.Fragment key={`seg-${si}`}>
             {parts.map((part, i) => {

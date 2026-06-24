@@ -1253,8 +1253,8 @@ class AgentOrchestrator:
             return False, "No inline JavaScript logic found. You MUST write the actual simulation logic inside a <script> tag."
             
         # Ensure the script actually attempts to render something to prevent blank screens
-        if not any(kw in js_code for kw in ['Plotly.newPlot', 'THREE.', 'getContext', 'document.getElementById', 'document.querySelector']):
-            return False, "The JavaScript logic does not attempt to render anything. You MUST use Plotly.newPlot, THREE.js, or Canvas/DOM APIs to display the simulation."
+        if not any(kw in js_code for kw in ['Plotly.', 'THREE.', 'getContext', 'document.getElementById', 'document.querySelector']):
+            return False, "The JavaScript logic does not attempt to render anything. You MUST use Plotly, THREE.js, or Canvas/DOM APIs to display the simulation."
 
         # Prepend mocks for DOM, Window, THREE, and Plotly to Node.js context.
         # This will bypass typical browser-only ReferenceErrors while letting actual syntax/API bugs throw errors.
@@ -1279,7 +1279,11 @@ class AgentOrchestrator:
                 clientHeight: 768,
                 scrollWidth: 1024,
                 scrollHeight: 768,
-                addEventListener: () => {},
+                addEventListener: function(event, cb) {
+                    if (typeof cb === 'function' && (event === 'DOMContentLoaded' || event === 'load' || event === 'change' || event === 'input')) {
+                        try { cb(); } catch(e) {}
+                    }
+                },
                 removeEventListener: () => {},
                 appendChild: function(c) { this.children.push(c); return c; },
                 removeChild: function(c) { return c; },
@@ -1362,7 +1366,11 @@ class AgentOrchestrator:
             body: _mockElement('body'),
             head: _mockElement('head'),
             documentElement: _mockElement('html'),
-            addEventListener: () => {},
+            addEventListener: function(event, cb) {
+                if (typeof cb === 'function' && (event === 'DOMContentLoaded' || event === 'load')) {
+                    try { cb(); } catch(e) {}
+                }
+            },
             removeEventListener: () => {},
             readyState: 'complete',
             cookie: '',
@@ -1374,7 +1382,11 @@ class AgentOrchestrator:
             outerWidth: 1024,
             outerHeight: 768,
             devicePixelRatio: 1,
-            addEventListener: () => {},
+            addEventListener: function(event, cb) {
+                if (typeof cb === 'function' && (event === 'DOMContentLoaded' || event === 'load')) {
+                    try { cb(); } catch(e) {}
+                }
+            },
             removeEventListener: () => {},
             getComputedStyle: () => new Proxy({}, { get: () => '0px' }),
             matchMedia: () => ({ matches: false, addEventListener: () => {} }),
@@ -1404,6 +1416,13 @@ class AgentOrchestrator:
         };
 
         // Promote critical browser globals to the global scope
+        global.window.window = global.window;
+        global.innerWidth = global.window.innerWidth;
+        global.innerHeight = global.window.innerHeight;
+        global.outerWidth = global.window.outerWidth;
+        global.outerHeight = global.window.outerHeight;
+        global.devicePixelRatio = global.window.devicePixelRatio;
+        global.location = global.window.location;
         global.requestAnimationFrame = global.window.requestAnimationFrame;
         global.cancelAnimationFrame = global.window.cancelAnimationFrame;
         global.setTimeout = (cb, ms) => { try { cb(); } catch(e) {} return 1; };
@@ -1485,6 +1504,7 @@ class AgentOrchestrator:
         };
         global.THREE = createProxy('THREE');
         global.Plotly = createProxy('Plotly');
+        global.OrbitControls = global.THREE.OrbitControls;
         global.window.THREE = global.THREE;
         global.window.Plotly = global.Plotly;
         global.window.window = global.window;
@@ -1692,7 +1712,8 @@ class AgentOrchestrator:
             "6. If the user query requests parameter controls/sliders (e.g. to adjust Vmax, Ki, mass, or velocity), you MUST include native Plotly sliders in the layout using fig.update_layout(sliders=[...]) or buttons in updatemenus=[...]. Precompute trace datasets/steps for different parameter settings so that sliding or clicking updates the graph data dynamically.\n"
             "7. Do NOT import plotly.subplots, plotly.io, or any other plotly module\n"
             "8. Last line MUST be: print(fig.to_json())\n"
-            "9. Do NOT call fig.show() or save to file\n\n"
+            "9. Do NOT call fig.show() or save to file\n"
+            "10. GRID RESOLUTION LIMIT: For 3D surface/contour plots, use a grid size of at most 25x25 or 30x30 points (e.g. np.linspace(..., 25) or np.linspace(..., 30)) to keep the output JSON compact, prevent streaming/rendering lag, and fit within context bounds.\n\n"
             "Output ONLY code in ```python``` blocks.\n\n"
             f"Topic: {compiled_plan[:3000]}"
         )
