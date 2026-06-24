@@ -924,21 +924,30 @@ class AgentOrchestrator:
     # =========================================================================
 
     def _classify_task(self, router_llm, prompt):
-        """Three-way classification: SIMPLE, CODING, or REASONING."""
+        """Three-way classification: SIMPLE, CODING, or REASONING.
+        Uses a combination of fast-tracks, structural heuristic checks, 
+        and an optimized few-shot prompt for maximum accuracy.
+        """
         prompt_clean = prompt.strip().lower()
+        prompt_lower = prompt_clean
+
+        # ── 1. Fast-track Code Block / Traceback presence (Direct CODING) ──────
+        if "```" in prompt or "traceback (most recent call)" in prompt_lower or "line " in prompt_lower and "in <module>" in prompt_lower:
+            return "CODING"
         
-        # 1. Fast-track greetings & simple metadata queries
+        # ── 2. Fast-track greetings & simple metadata queries (Direct SIMPLE) ──
         greetings = {"hi", "hello", "hey", "hola", "howdy", "greetings", "good morning", "good afternoon", "good evening", "how are you", "who are you", "what is your name"}
         if prompt_clean in greetings or prompt_clean.replace("?", "").strip() in greetings:
             return "SIMPLE"
-            
-        # 2. Fast-track short queries (less than 15 chars) that are not coding
+
+        # ── 3. Fast-track short queries (less than 15 chars) ───────────────────
         if len(prompt_clean) < 15:
             code_kws = ["code", "write", "def ", "class ", "import ", "script", "app", "html", "css", "js", "cpp", "py"]
-            if not any(kw in prompt_clean for kw in code_kws):
-                return "SIMPLE"
+            if any(kw in prompt_clean for kw in code_kws):
+                return "CODING"
+            return "SIMPLE"
 
-        # 3. Fast-track basic arithmetic (e.g., "2+2", "what is 5*5", "100 / 4")
+        # ── 4. Fast-track basic arithmetic (e.g., "2+2", "solve 5*5") ──────────
         arithmetic_clean = prompt_clean
         for prefix in ["what is ", "whats ", "calculate ", "compute ", "what is the value of ", "solve "]:
             if arithmetic_clean.startswith(prefix):
@@ -949,7 +958,20 @@ class AgentOrchestrator:
         if re.match(r"^[0-9+\-*/%().\s]+$", arithmetic_clean) and len(arithmetic_clean) > 0:
             return "SIMPLE"
 
-        # 4. Fast-track current-events / recency queries to SIMPLE (they need web search, not reasoning)
+        # ── 5. Strong deterministic data-science & programming overrides ───────
+        strong_code_indicators = [
+            "sandboxdatahelper", "plotly", "pandas", "dataframe", "numpy", "matplotlib",
+            "write a python", "write python", "python script", "implement a python",
+            "write code to", "write a code to", "plotly layout", "forecast close price",
+            "standardized predictive_metrics", "pip install", "import pandas", "import numpy",
+            "flask", "fastapi", "django", "sql query", "react component", "javascript script",
+            "html code", "css styling", "dockerfile", "requirements.txt", "git command",
+            "bash script", "powershell script", "shell script", "api endpoint", "json metric"
+        ]
+        if any(kw in prompt_lower for kw in strong_code_indicators):
+            return "CODING"
+
+        # ── 6. Fast-track current-events & search-only requests (Direct SIMPLE) ──
         recency_keywords = ["who won", "who lost", "last match", "latest match", "recent match", "score of", "latest score",
                             "yesterday", "today's", "todays", "tonight", "last night", "this week", "this month",
                             "latest news", "recent news", "breaking news", "current", "right now",
@@ -957,68 +979,65 @@ class AgentOrchestrator:
                             "weather today", "weather in", "temperature in", "stock price", "crypto price",
                             "box office", "release date", "when is", "when does", "when did",
                             "election result", "who won the", "match result", "ipl", "world cup"]
-        if any(kw in prompt_clean for kw in recency_keywords):
-            return "SIMPLE"
-
-        p = (
-            "Classify this query into EXACTLY ONE category. Reply with ONLY the category name.\n\n"
-            "SIMPLE — Quick factual answers, greetings, definitions, translations, yes/no questions, fetching latest news/weather/facts.\n"
-            "  Examples: 'What is the capital of France?', 'Hi how are you?', 'Define entropy', 'Translate hello to Spanish', 'fetch latest weather news'\n\n"
-            "CODING — Prompts that explicitly ask to write, fix, debug, or compile programming code, scripts, websites, databases, or software functions.\n"
-            "  Examples: 'Write a Python sort', 'Fix this code', 'Write C code for linked list',\n"
-            "  'Create a script to...', 'Debug this error', 'Build a calculator app'\n"
-            "  Keywords: write code, write a script, python, javascript, C++, java, css, html, debug, fix code\n\n"
-            "REASONING — Mathematical calculations, physics simulations/derivations, logic puzzles, theory explanations, science analysis, JEE/NEET questions.\n"
-            "  Note: Even if the query asks to solve equations, simulate a system, calculate trajectories, or visualize/plot a math/scientific concept, it is REASONING unless it explicitly asks to write/fix programming code or scripts.\n"
-            "  Examples: 'Solve this integral', 'Derive Navier-Stokes', 'Explain the Lorenz Attractor and show a 3D plot', 'Calculate projectile trajectory'\n\n"
-            "IMPORTANT RULES:\n"
-            "- If the query asks to EXPLAIN something AND write/develop programming code/scripts → CODING\n"
-            "- If the query asks for a mathematical calculation, physics simulation, or concept explanation with visualization (but NO explicit request for code/scripts) → REASONING\n"
-            "- If the query simply asks to 'fetch', 'get', 'search', or 'scrape' weather, news, or facts from the web without asking to write programming code → SIMPLE or REASONING, NOT CODING.\n"
-            "- If unsure between SIMPLE and REASONING → choose REASONING\n"
-            "- If unsure between CODING and REASONING → choose REASONING (unless programming code/scripts are explicitly requested)\n\n"
-            f"Query: {prompt[:500]}\n\nCategory:"
-        )
-        result = self._call_model(router_llm, p, max_tokens=10, temperature=0.1)
-        upper = str(result).strip().upper()
         
-        # Override classification if strong coding indicators are present
-        prompt_lower = prompt.lower()
-        strong_code_indicators = [
-            "sandboxdatahelper", "plotly", "pandas", "dataframe", "numpy", "matplotlib",
-            "write a python", "write python", "python script", "implement a python",
-            "write code to", "write a code to", "plotly layout", "forecast close price",
-            "standardized predictive_metrics"
-        ]
-        if any(kw in prompt_lower for kw in strong_code_indicators):
-            return "CODING"
-
-        # Override classification if the intent is purely search/weather/news and doesn't ask to create code
         search_intents = ["fetch from web", "search the web", "search for", "google for", "latest news", "weather news", "current weather", "weather of"]
         code_intent_kws = ["write code", "write a code", "javascript code", "python code", "c++ code", "java code", "html code", "css code", "write a script", "code for", "script to", "build", "implement"]
         has_code_intent = any(kw in prompt_lower for kw in code_intent_kws)
-        
-        if any(intent in prompt_lower for intent in search_intents) and not has_code_intent:
-            if "REASONING" in upper:
-                return "REASONING"
+
+        if any(kw in prompt_clean for kw in recency_keywords) or (any(intent in prompt_lower for intent in search_intents) and not has_code_intent):
             return "SIMPLE"
 
-        # Strict keyword extraction from model response
+        # ── 7. Advanced LLM Few-Shot Classifier Prompt ─────────────────────────
+        few_shot_prompt = (
+            "Classify the following query into exactly ONE of the three categories: SIMPLE, CODING, or REASONING.\n\n"
+            "CATEGORIES:\n"
+            "1. SIMPLE: Conversational greetings, quick factual answers, definitions, translations, yes/no queries, news, or weather.\n"
+            "   - 'What is the capital of France?' -> SIMPLE\n"
+            "   - 'Translate hello to Spanish' -> SIMPLE\n"
+            "   - 'Define cellular respiration' -> SIMPLE\n"
+            "   - 'Who is the CEO of Apple?' -> SIMPLE\n\n"
+            "2. CODING: Prompts explicitly asking to write, fix, debug, or compile code, scripts, web pages, APIs, databases, or software features.\n"
+            "   - 'Write a python script to sort a list' -> CODING\n"
+            "   - 'Fix this index error in my code' -> CODING\n"
+            "   - 'How to read a CSV file using pandas?' -> CODING\n"
+            "   - 'Build a simple calculator UI in HTML and CSS' -> CODING\n\n"
+            "3. REASONING: Scientific explanations, multi-step math derivations, physics proofs, logic puzzles, or chemical reaction balancing (where NO code or script is explicitly requested).\n"
+            "   - 'Solve this integral: integral of x^2 sin(x) dx' -> REASONING\n"
+            "   - 'Derive the equations of motion for a double pendulum' -> REASONING\n"
+            "   - 'Explain the physical significance of the Schrödinger equation' -> REASONING\n"
+            "   - 'If a card is drawn from a deck, what is the probability of a spade?' -> REASONING\n\n"
+            "IMPORTANT CLASSIFICATION RULES:\n"
+            "- If the query asks for scientific math/physics calculations AND asks to write code, program, or script to do it -> CODING.\n"
+            "- If the query asks to explain a scientific concept and plot/visualize it, but DOES NOT mention writing code, scripts, or programming -> REASONING.\n"
+            "- If the query is purely about retrieving/fetching data or search queries -> SIMPLE.\n\n"
+            f"Query: {prompt}\n\n"
+            "Category:"
+        )
+
+        result = self._call_model(router_llm, few_shot_prompt, max_tokens=10, temperature=0.1)
+        upper = str(result).strip().upper()
+
+        # Strict extraction from LLM response
         if "CODING" in upper:
             return "CODING"
         if "REASONING" in upper:
             return "REASONING"
         if "SIMPLE" in upper:
             return "SIMPLE"
-            
-        # Fallback: keyword scan on the original prompt for safety
+
+        # ── 8. Fallback Keyword Scan Safety Net ────────────────────────────────
         code_keywords = [
             "write code", "write a code", "fix code", "debug", "script", "program", "compile",
             "function(", "def ", "class ", "import ", "coding", "develop", "web app", "website",
             "implement", "plotly", "matplotlib", "dataframe", "numpy", "pandas", "scipy",
-            "sandboxdatahelper", "plot"
+            "sandboxdatahelper", "plot", "regex", "api", "query", "database", "install"
         ]
-        reason_keywords = ["explain", "prove", "derive", "why ", "how does", "in detail", "theory", "analyze", "compare", "calculate", "solve", "simulate", "trajectory", "numerical", "3d plot", "interactive plot"]
+        reason_keywords = [
+            "explain", "prove", "derive", "why ", "how does", "in detail", "theory", "analyze",
+            "compare", "calculate", "solve", "simulate", "trajectory", "numerical", "3d plot",
+            "interactive plot", "derivation", "theorem", "proof", "physics", "chemistry", "equation"
+        ]
+
         if any(kw in prompt_lower for kw in code_keywords):
             return "CODING"
         if any(kw in prompt_lower for kw in reason_keywords):
