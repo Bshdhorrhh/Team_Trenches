@@ -285,6 +285,10 @@ To maximize accuracy, performance, and stability on consumer hardware, the follo
 * **Model-Specific Physical Context Ceilings:** Prevents VRAM OOM and RoPE overflows on discrete GPUs by dynamically limiting context allocation to the models' physical training limits: `router` (8k), `vibethinker` (8k), `opencode` (16k), and `deepseek_r1` (16k).
 * **Automatic CPU Fallback Loader:** Intercepts GPU context creation failures and automatically retries loading the model with `n_gpu_layers=0` (CPU mode) to keep the pipeline alive.
 * **Visual Sandbox Error Overlay:** Captures client-side JavaScript/Three.js sandbox runtime exceptions and displays them inside a visual warning panel within the iframe viewport, eliminating silent black-screen failures.
+* **Aligned Coding & Reasoning Loops:** Re-engineered the coding pipeline to follow the exact same nested retry structure as the reasoning pipeline (2 outer Nuclear Resets and 2 inner draft attempts per reset 0, with immediate error feedback propagation).
+* **Multi-Tiered Intent Classification:** Overhauled task classification into four stages: Tier 1 structural pattern checks (raw code block/traceback fast-tracks), Tier 2 deterministic domain overrides (automatically routing data science prompts containing terms like pandas, numpy, or plotly layout to CODING), Tier 3 few-shot prompting, and Tier 4 fallback scans.
+* **Auto-pip Package Installer:** The sandbox executor now dynamically detects runtime `ModuleNotFoundError` during code execution, triggers a pip installation on the fly, and re-executes the script seamlessly.
+* **Interactive 3D Gate Suggestion:** Rather than forcing rendering overhead on every compatible prompt, the orchestrator detects 3D options and prompts the user dynamically, allowing them to trigger 3D generation by responding `generate 3d`.
 
 ---
 
