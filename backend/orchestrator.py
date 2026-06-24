@@ -313,7 +313,7 @@ class AgentOrchestrator:
         
         # Model-specific physical context ceilings to prevent VRAM OOM and RoPE overflow
         model_ceilings = {
-            "router": 8192,
+            "router": 16384,
             "vibethinker": 8192,
             "opencode": 16384,
             "deepseek_r1": 16384
