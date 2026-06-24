@@ -1563,7 +1563,7 @@ class AgentOrchestrator:
             "3. Use fig.update_layout(template='plotly_dark', margin=dict(l=0,r=0,t=40,b=0))\n"
             "4. Do NOT use fig.update_scenes(). Do NOT use go.FigureControls(). They do NOT exist.\n"
             "5. Do NOT set background colors manually\n"
-            "6. Do NOT add annotations, updatemenus, or buttons\n"
+            "6. If the user query requests parameter controls/sliders (e.g. to adjust Vmax, Ki, mass, or velocity), you MUST include native Plotly sliders in the layout using fig.update_layout(sliders=[...]) or buttons in updatemenus=[...]. Precompute trace datasets/steps for different parameter settings so that sliding or clicking updates the graph data dynamically.\n"
             "7. Do NOT import plotly.subplots, plotly.io, or any other plotly module\n"
             "8. Last line MUST be: print(fig.to_json())\n"
             "9. Do NOT call fig.show() or save to file\n\n"
@@ -1607,15 +1607,27 @@ class AgentOrchestrator:
         # Reflexion self-fix loop for Strategy 2: Max 2 self-fix attempts
         for attempt in range(2):
             cleaned = _strip_sandbox_prefix(viz_output).strip() if viz_output else ""
-            if viz_success and cleaned.startswith("{"):
+            json_extracted = False
+            if viz_success and "{" in cleaned:
+                start_idx = cleaned.find("{")
+                end_idx = cleaned.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    json_candidate = cleaned[start_idx:end_idx+1]
+                    try:
+                        import json
+                        json.loads(json_candidate)
+                        cleaned = json_candidate
+                        json_extracted = True
+                    except Exception:
+                        pass
+            if json_extracted:
                 break
             if status_callback:
                 status_callback(f"Fixing 3D syntax/runtime error (Round {attempt+1})...", "warning", "opencode", 99)
             
             error_details = viz_output if viz_output else "No valid python code block was generated."
-            cleaned_check = _strip_sandbox_prefix(viz_output).strip() if viz_output else ""
-            if viz_success and not cleaned_check.startswith("{"):
-                error_details = "Code ran successfully but failed to print JSON. Make sure the last line is print(fig.to_json())"
+            if viz_success and not json_extracted:
+                error_details = "Code ran successfully but failed to print valid JSON. Make sure the script prints fig.to_json()"
                 
             if not viz_extract:
                 fix_p = (
@@ -1933,9 +1945,20 @@ class AgentOrchestrator:
             "    - For network protocol tasks, use scapy to simulate packet creation, validation of header offsets, and printing raw hex/dissections of packets. Do NOT try to connect to external ports or services; simulate them.\n\n"
             "=== PLOTLY 3D CHEAT SHEET ===\n"
             "import plotly.graph_objects as go\n"
-            "fig = go.Figure(data=[go.Scatter3d(x=X, y=Y, z=Z, mode='lines', line=dict(color='cyan', width=2))])\n"
+            "import numpy as np\n"
+            "# 1. Standard Plot: \n"
+            "fig = go.Figure(data=[go.Scatter3d(x=X, y=Y, z=Z, mode='lines')])\n"
+            "# 2. Adding Sliders/Controls: If the user requests parameter controls, you MUST precompute the plot data for different parameter values (e.g. 10 different slider steps), add a trace for each parameter value to the figure, set all but the first trace to visible=False, and add a layout slider dict under `sliders` to toggle the visibility of the traces. Example:\n"
+            "#    steps = []\n"
+            "#    for i in range(10):\n"
+            "#        step = dict(method='update', args=[{'visible': [t == i for t in range(10)]}], label=str(i))\n"
+            "#        steps.append(step)\n"
+            "#    fig.update_layout(sliders=[dict(active=0, steps=steps)])\n"
+            "# 3. Dark Theme Layout:\n"
             "fig.update_layout(template='plotly_dark', margin=dict(l=0, r=0, b=0, t=40))\n"
-            "print(fig.to_json()) # ALWAYS print json for the UI to render\n"
+            "# 4. Outputs: ALWAYS print JSON to stdout so the UI can render, AND call fig.show() so it runs locally:\n"
+            "print(fig.to_json())\n"
+            "fig.show()\n"
             "============================="
         )
 
