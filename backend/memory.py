@@ -63,8 +63,8 @@ class Memory:
     def recall(self, task, n_results=2, embed_fn=None):
         """
         Search memory for past experiences related to the current task.
-        If embed_fn is provided, it computes cosine similarity.
-        Otherwise, it falls back to a keyword-based text search.
+        Prioritizes successful solution patterns over mistake/error logs to
+        prevent error contamination when the same question is asked again.
         """
         if self.count() == 0:
             return ""
@@ -72,13 +72,34 @@ class Memory:
         # Try ChromaDB query first
         if self.use_chroma:
             try:
-                results = self.collection.query(query_texts=[task], n_results=n_results)
+                results = self.collection.query(query_texts=[task], n_results=n_results * 2)  # Fetch extra to filter
                 if results and results.get('documents') and results['documents'][0]:
-                    memories = "\n---\n".join(results['documents'][0])
-                    # Limit memory injection to prevent Context Window OOM while keeping enough context
-                    if len(memories) > 4000:
-                        cutoff = memories.rfind('\n\n', 0, 4000)
-                        cutoff = cutoff if cutoff != -1 else 4000
+                    docs = results['documents'][0]
+                    metadatas = results.get('metadatas', [[]])[0] if results.get('metadatas') else []
+                    
+                    # Prioritize solution memories over mistake logs
+                    solutions = []
+                    mistakes = []
+                    for i, doc in enumerate(docs):
+                        meta = metadatas[i] if i < len(metadatas) else {}
+                        if meta.get('type') == 'mistake_fix':
+                            mistakes.append(doc)
+                        else:
+                            solutions.append(doc)
+                    
+                    # Use solutions first, add at most 1 mistake pattern for context
+                    filtered = solutions[:n_results]
+                    if len(filtered) < n_results and mistakes:
+                        filtered.append(mistakes[0])
+                    
+                    if not filtered:
+                        filtered = docs[:n_results]
+                    
+                    memories = "\n---\n".join(filtered)
+                    # Limit memory injection to prevent Context Window OOM
+                    if len(memories) > 3000:
+                        cutoff = memories.rfind('\n\n', 0, 3000)
+                        cutoff = cutoff if cutoff != -1 else 3000
                         memories = memories[:cutoff] + "\n\n... [TRUNCATED]"
                     return f"\n\nRelevant past experience:\n{memories}\n"
             except Exception as e:

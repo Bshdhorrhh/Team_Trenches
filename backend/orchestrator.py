@@ -2025,18 +2025,33 @@ class AgentOrchestrator:
         # Load deepseek_r1 to synthesize the response
         ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
         
+        # Strip raw Plotly/JSON dumps from sandbox output to prevent context window blowout
+        # and raw JSON leaking into the final user-facing response.
+        clean_output = output
+        if clean_output and len(clean_output) > 2000:
+            # Detect and strip Plotly JSON (starts with { and contains "data":[ or "layout":)
+            import re
+            # Remove any large JSON blob (likely fig.to_json() output)
+            json_pattern = re.compile(r'\{"data":\[.*?\}\}\}', re.DOTALL)
+            stripped = json_pattern.sub('[Plotly chart JSON removed — rendered separately in UI]', clean_output)
+            # If stripping didn't help, just truncate
+            if len(stripped) > 2000:
+                stripped = stripped[:2000] + '\n... [OUTPUT TRUNCATED]'
+            clean_output = stripped
+        
         synthesis_p = (
             "You are a technical data scientist and senior software engineer.\n"
             f"The user query was:\n{prompt}\n\n"
             f"The Python script executed successfully in the sandbox.\n"
             f"SCRIPT CODE:\n```python\n{code}\n```\n\n"
-            f"SCRIPT EXECUTION OUTPUT:\n{output}\n\n"
+            f"SCRIPT EXECUTION OUTPUT:\n{clean_output}\n\n"
             "INSTRUCTIONS:\n"
             "1. Generate a beautifully structured, comprehensive explanation of the results.\n"
             "2. Present any numerical results, performance metrics (like R2, MAE, RMSE, accuracy, predicted prices), or tables in a clean, publication-grade Markdown format.\n"
             "3. Explain how unit checking and dimensional consistency constraints have been satisfied.\n"
             "4. End your response with the complete Python code block wrapped in ```python``` so the user can copy it.\n"
-            "5. Do NOT include any meta-commentary about the model execution or pipeline steps. Output only the polished technical response."
+            "5. Do NOT include any meta-commentary about the model execution or pipeline steps. Output only the polished technical response.\n"
+            "6. Do NOT include raw JSON data dumps in your response. If the code generated a Plotly chart, mention that the visualization is rendered in the UI."
         )
         
         final_response = self._strip_thinking(self._call_model(
