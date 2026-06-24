@@ -2196,6 +2196,20 @@ class AgentOrchestrator:
 
         if status_callback:
             status_callback("Max retries reached.", "error", "system", 100)
+        
+        # Save unverified draft to memory with traceback to assist future runs
+        unverified_doc = (
+            f"[UNVERIFIED BEST-EFFORT CODE DRAFT]\n"
+            f"The following code script failed verification with error:\n{output[:800]}\n"
+            f"Logic Plan:\n{compiled_plan[:1500]}\n"
+            f"Code:\n{code}"
+        )
+        try:
+            self.memory.save(prompt, unverified_doc)
+        except Exception as es:
+            print(f"Failed to save unverified code draft: {es}")
+
+        router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
         return f"### Logic Plan\n{compiled_plan}\n\n### Execution Failed\n{output}\n\n### Code\n```python\n{code}\n```"
 
     # =====================================================================
@@ -2416,6 +2430,18 @@ class AgentOrchestrator:
 
             if status_callback:
                 status_callback("Max retries reached. Returning best effort.", "warning", "system", 98)
+            
+            # Save unverified draft to memory with traceback to assist future runs
+            unverified_doc = (
+                f"[UNVERIFIED BEST-EFFORT REASONING DRAFT]\n"
+                f"The following reasoning answer failed verification with sandbox error:\n{final_out[:800]}\n"
+                f"Answer:\n{final_ans}"
+            )
+            try:
+                self.memory.save(prompt, unverified_doc)
+            except Exception as es:
+                print(f"Failed to save unverified reasoning draft: {es}")
+
             router_llm = None; ds_llm = None; vibe_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
             viz = self._check_3d_gate(prompt, final_ans, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
             return f"### Verified Answer\n{final_ans}{viz}"
