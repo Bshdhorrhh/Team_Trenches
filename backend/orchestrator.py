@@ -935,7 +935,7 @@ class AgentOrchestrator:
 
         # ── 0. Fast-track Scientific Derivation/Proof to REASONING ─────────────
         reasoning_triggers = ["derive", "prove", "equations of motion", "mathematically derive", "mathematical derivation", "theorem", "physical significance"]
-        coding_triggers = ["code", "script", "program", "write a", "implement a", "compile", "develop", "web app", "website", "scipy", "pandas", "numpy", "matplotlib", "plotly", "dataframe", "python"]
+        coding_triggers = ["code", "script", "program", "write a", "implement a", "compile", "develop", "web app", "website", "scipy", "pandas", "numpy", "matplotlib", "plotly", "dataframe", "python", "predict", "forecast", "prediction"]
         if any(trigger in prompt_lower for trigger in reasoning_triggers):
             if not any(coding in prompt_lower for coding in coding_triggers):
                 return "REASONING"
@@ -1014,7 +1014,8 @@ class AgentOrchestrator:
             "standardized predictive_metrics", "pip install", "import pandas", "import numpy",
             "flask", "fastapi", "django", "sql query", "react component", "javascript script",
             "html code", "css styling", "dockerfile", "requirements.txt", "git command",
-            "bash script", "powershell script", "shell script", "api endpoint", "json metric"
+            "bash script", "powershell script", "shell script", "api endpoint", "json metric",
+            "predict", "forecast", "prediction"
         ]
         if any(kw in prompt_lower for kw in strong_code_indicators):
             return "CODING"
