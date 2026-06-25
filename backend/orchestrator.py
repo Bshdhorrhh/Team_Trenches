@@ -1725,6 +1725,19 @@ class AgentOrchestrator:
         # ── Strategy 2: Python Plotly (backend sandbox verified fallback) ──────────
         if status_callback:
             status_callback("HTML Failed. Falling back to Python Plotly...", "warning", "opencode", 97)
+        is_physics = any(kw in compiled_plan.lower() for kw in ['proton', 'electron', 'magnetic', 'electric', 'lorentz', 'ode', 'differential equation', 'cyclotron'])
+        physics_rules = ""
+        if is_physics:
+            physics_rules = (
+                "11. CRITICAL ODE PHYSICS RULES — follow exactly or the trajectory will explode:\n"
+                "    a. For charged particle motion (Lorentz force), state MUST be 6 components: [x, y, z, vx, vy, vz]. NEVER use 3-component [vx, vy, vz] only.\n"
+                "    b. ODE function MUST return [vx, vy, vz, ax, ay, az] (positions' derivatives are velocities, velocities' derivatives are accelerations).\n"
+                "    c. Compute cyclotron period: T = 2*pi*m / (abs(q) * B_magnitude). Set t_span = (0, N_cycles * T). NEVER hardcode t_span=(0,1) or any non-physics time.\n"
+                "    d. Use t_eval = np.linspace(0, N_cycles*T, N_cycles*200) for smooth curve.\n"
+                "    e. Plot POSITIONS sol.y[0], sol.y[1], sol.y[2] (x, y, z), NOT velocities. Velocity values are ~1e8 scale and will break the plot scale.\n"
+                "    f. Use solve_ivp(..., method='RK45', max_step=T/200, dense_output=False).\n\n"
+            )
+
         viz_prompt = (
             "You are a Python data visualization expert. "
             "Write ONLY a complete Python script using plotly for an interactive 3D visualization.\n"
@@ -1739,16 +1752,11 @@ class AgentOrchestrator:
             "8. Do NOT call fig.show() or save to file.\n"
             "9. GRID RESOLUTION LIMIT: Use grid size of at most 30x30 for surface plots.\n"
             "10. Write a complete, self-contained Python script from scratch. Define all constants. Print the JSON.\n"
-            "11. CRITICAL ODE PHYSICS RULES — follow exactly or the trajectory will explode:\n"
-            "    a. For charged particle motion (Lorentz force), state MUST be 6 components: [x, y, z, vx, vy, vz]. NEVER use 3-component [vx, vy, vz] only.\n"
-            "    b. ODE function MUST return [vx, vy, vz, ax, ay, az] (positions' derivatives are velocities, velocities' derivatives are accelerations).\n"
-            "    c. Compute cyclotron period: T = 2*pi*m / (abs(q) * B_magnitude). Set t_span = (0, N_cycles * T). NEVER hardcode t_span=(0,1) or any non-physics time.\n"
-            "    d. Use t_eval = np.linspace(0, N_cycles*T, N_cycles*200) for smooth curve.\n"
-            "    e. Plot POSITIONS sol.y[0], sol.y[1], sol.y[2] (x, y, z), NOT velocities. Velocity values are ~1e8 scale and will break the plot scale.\n"
-            "    f. Use solve_ivp(..., method='RK45', max_step=T/200, dense_output=False).\n\n"
+            f"{physics_rules}"
             "Output ONLY code in ```python``` blocks.\n\n"
             f"Topic Context:\n{clean_plan[:2000]}"
         )
+
         viz_token_est = len(viz_prompt) // 3
         viz_max_tokens = max(512, oc_ctx - viz_token_est - 100)
         viz_max_tokens = min(viz_max_tokens, gen_tokens)
