@@ -187,17 +187,20 @@
                         🏆 Competitive Baseline Comparison
                     </h2>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
+                        <table class="w-full text-left border-collapse min-w-[750px]">
                             <thead>
-                                <tr class="border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                    <th class="py-3 px-4">Evaluation Benchmark</th>
-                                    <th class="py-3 px-4 text-center">GPT-4</th>
-                                    <th class="py-3 px-4 text-center">Claude 3.5 Sonnet</th>
-                                    <th class="py-3 px-4 text-center">Llama-3-70B</th>
-                                    <th class="py-3 px-4 text-center text-blue-400">DeepThinker (Local TPU)</th>
+                                <tr class="border-b border-slate-800 text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                    <th class="py-3.5 px-3 text-left">Evaluation Benchmark</th>
+                                    <th class="py-3.5 px-2 text-center text-blue-400">GPT-4o</th>
+                                    <th class="py-3.5 px-2 text-center text-orange-400">Sonnet 3.5</th>
+                                    <th class="py-3.5 px-2 text-center text-amber-500">Opus 3</th>
+                                    <th class="py-3.5 px-2 text-center text-emerald-400">Gemini 1.5 Pro</th>
+                                    <th class="py-3.5 px-2 text-center text-purple-400 font-extrabold">Fable / SOTA</th>
+                                    <th class="py-3.5 px-2 text-center text-slate-500 font-medium">Llama-3-70B</th>
+                                    <th class="py-3.5 px-3 text-center text-blue-400 bg-blue-500/5 rounded-t-2xl border-t border-x border-blue-500/20 font-extrabold">DeepThinker (Local TPU)</th>
                                 </tr>
                             </thead>
-                            <tbody class="text-sm text-slate-300 font-medium" id="baselineTableBody">
+                            <tbody class="text-xs md:text-sm text-slate-300 font-medium" id="baselineTableBody">
                                 <!-- Dynamic baselines -->
                             </tbody>
                         </table>
@@ -253,32 +256,39 @@
             
             // Raw static data
             const baselines = {
-                "HumanEval": { name: "HumanEval (Coding)", gpt4: "90.2%", sonnet: "92.0%", llama3: "86.0%", target: "HumanEval" },
-                "MBPP": { name: "MBPP (Coding)", gpt4: "86.4%", sonnet: "90.5%", llama3: "81.2%", target: "MBPP" },
-                "GSM8K": { name: "GSM8K (Math Reasoning)", gpt4: "92.0%", sonnet: "96.4%", llama3: "93.0%", target: "GSM8K" },
-                "MATH": { name: "MATH (Advanced Algebra/Calculus)", gpt4: "42.5%", sonnet: "71.1%", llama3: "41.0%", target: "MATH" },
-                "SWE-bench Lite": { name: "SWE-bench Lite (SWE)", gpt4: "13.0%", sonnet: "27.3%", llama3: "3.8%", target: "SWE-bench Lite" },
-                "SWE-bench Pro": { name: "SWE-bench Pro (SWE Enterprise)", gpt4: "8.0%", sonnet: "18.2%", llama3: "1.5%", target: "SWE-bench Pro" },
-                "SearchQA / HotpotQA": { name: "SearchQA / HotpotQA (RAG)", gpt4: "85.0%", sonnet: "88.0%", llama3: "82.0%", target: "SearchQA / HotpotQA" }
+                "HumanEval": { name: "HumanEval (Coding)", gpt4: "90.2%", sonnet: "92.0%", opus: "84.1%", gemini: "84.1%", fable: "93.5%", llama3: "86.0%", target: "HumanEval" },
+                "MBPP": { name: "MBPP (Coding)", gpt4: "86.4%", sonnet: "90.5%", opus: "83.0%", gemini: "82.5%", fable: "91.0%", llama3: "81.2%", target: "MBPP" },
+                "GSM8K": { name: "GSM8K (Math Reasoning)", gpt4: "92.0%", sonnet: "96.4%", opus: "95.0%", gemini: "91.7%", fable: "N/A", llama3: "93.0%", target: "GSM8K" },
+                "MATH": { name: "MATH (Advanced Algebra/Calculus)", gpt4: "42.5%", sonnet: "71.1%", opus: "60.1%", gemini: "57.7%", fable: "N/A", llama3: "41.0%", target: "MATH" },
+                "SWE-bench Lite": { name: "SWE-bench Lite (SWE)", gpt4: "13.0%", sonnet: "27.3%", opus: "11.7%", gemini: "12.5%", fable: "38.5%", llama3: "3.8%", target: "SWE-bench Lite" },
+                "SWE-bench Pro": { name: "SWE-bench Pro (SWE Enterprise)", gpt4: "8.0%", sonnet: "18.2%", opus: "7.5%", gemini: "6.8%", fable: "24.0%", llama3: "1.5%", target: "SWE-bench Pro" },
+                "SearchQA / HotpotQA": { name: "SearchQA / HotpotQA (RAG)", gpt4: "85.0%", sonnet: "88.0%", opus: "83.5%", gemini: "84.0%", fable: "N/A", llama3: "82.0%", target: "SearchQA / HotpotQA" }
             };
 
             tableBody.innerHTML = "";
             Object.keys(baselines).forEach(key => {
                 const item = baselines[key];
                 const isCurrent = key === currentCategory;
-                const rowHighlight = isCurrent ? "bg-blue-500/5 border-l-2 border-l-blue-500" : "border-b border-slate-900";
+                
+                // Highlight active row with a premium glowing border
+                const rowHighlight = isCurrent 
+                    ? "bg-blue-500/10 border-l-4 border-l-blue-500 border-y border-y-blue-500/20" 
+                    : "border-b border-slate-900/60 hover:bg-slate-900/30";
                 
                 // Retrieve score from persistent history if not currently running
                 const historyScore = history[key];
                 const displayAccuracy = isCurrent ? `${currentAccuracy}%` : (historyScore !== undefined ? `${historyScore}%` : "N/A (Pending)");
                 
                 tableBody.innerHTML += `
-                    <tr class="${rowHighlight} transition">
-                        <td class="py-3 px-4 text-slate-300 font-semibold">${item.name}</td>
-                        <td class="py-3 px-4 text-center text-slate-400 mono">${item.gpt4}</td>
-                        <td class="py-3 px-4 text-center text-slate-400 mono">${item.sonnet}</td>
-                        <td class="py-3 px-4 text-center text-slate-400 mono">${item.llama3}</td>
-                        <td class="py-3 px-4 text-center text-blue-400 font-bold mono bg-blue-500/5">${displayAccuracy}</td>
+                    <tr class="${rowHighlight} transition-all duration-150">
+                        <td class="py-3 px-3 text-slate-200 font-semibold text-xs md:text-sm">${item.name}</td>
+                        <td class="py-3 px-2 text-center text-slate-400 mono text-xs md:text-sm">${item.gpt4}</td>
+                        <td class="py-3 px-2 text-center text-slate-400 mono text-xs md:text-sm">${item.sonnet}</td>
+                        <td class="py-3 px-2 text-center text-slate-400 mono text-xs md:text-sm">${item.opus}</td>
+                        <td class="py-3 px-2 text-center text-slate-400 mono text-xs md:text-sm">${item.gemini}</td>
+                        <td class="py-3 px-2 text-center text-purple-400/90 font-semibold mono text-xs md:text-sm">${item.fable}</td>
+                        <td class="py-3 px-2 text-center text-slate-500 mono text-xs md:text-sm">${item.llama3}</td>
+                        <td class="py-3 px-3 text-center text-blue-400 font-bold mono text-xs md:text-sm bg-blue-500/5 border-x border-blue-500/10">${displayAccuracy}</td>
                     </tr>
                 `;
             });
