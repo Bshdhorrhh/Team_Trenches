@@ -2729,38 +2729,6 @@ class AgentOrchestrator:
         router_llm = None; ds_llm = None; oc_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
         return f"### Logic Plan\n{compiled_plan}\n\n### Execution Failed\n{output}\n\n### Code\n```python\n{code}\n```"
 
-    def _synthesize_reasoning_response(self, prompt, verified_text, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
-        """Refines a verified reasoning answer into a beautifully formatted scientific report with LaTeX formulas and clean structure."""
-        if status_callback:
-            status_callback("Synthesizing premium scientific report...", "info", "opencode", 99)
-        
-        coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
-        
-        synthesis_prompt = (
-            "You are a professional scientific editor. "
-            "Your task is to take a verified physics/math solution and rewrite it into a beautiful, publication-grade scientific report.\n\n"
-            "RULES:\n"
-            "1. STRUCTURE: Organize the response into clean, numbered sections (e.g., '1. Equations of Motion', '2. Analytical Solution', '3. Drift Velocity Calculation', '4. Numerical Verification').\n"
-            "2. FORMULA DELIMITERS: Format all mathematical formulas, constants, and equations in proper LaTeX: use single dollar signs $...$ for inline equations and double dollar signs $$...$$ for standalone display blocks. NEVER use backtick code blocks (```) for mathematical formulas.\n"
-            "3. NO INTERNAL MONOLOGUE OR DIALOGUE: Completely remove any conversational text, self-correction comments, or internal monologue (e.g., 'Let me think', 'Alright, I will compute', 'Wait, that seems off', 'I must have made a mistake', 'Alright, so I\'m trying to figure out'). Start directly with the professional report.\n"
-            "4. DO NOT ALTER THE MATHEMATICAL CLAIMS OR CODE: Keep the correct verified math, equations, constants, and any python code blocks exactly as they are in the verified source text.\n\n"
-            f"User Query: {prompt}\n\n"
-            f"Verified Source Text:\n{verified_text}"
-        )
-        
-        system_prompt = (
-            "You are an expert scientific editor and technical writer. Output ONLY the beautifully formatted markdown report. "
-            "Do NOT write any normal conversational text outside the report."
-        )
-        
-        synthesized_text = self._strip_thinking(
-            self._call_model(coder_llm, synthesis_prompt, max_tokens=gen_tokens, temperature=0.1, system_prompt=system_prompt)
-        )
-        
-        if synthesized_text and len(synthesized_text.strip()) > 100:
-            return synthesized_text.strip()
-        return verified_text
-
     # =====================================================================
     # REASONING PIPELINE — Playground-Verified or LLM Debate
     # =====================================================================
@@ -2867,12 +2835,9 @@ class AgentOrchestrator:
                         if status_callback:
                             status_callback("Reasoning VERIFIED!", "success", "deepseek_r1", 80)
                         self.memory.save(prompt, ds_answer)
-                        synthesized_answer = self._synthesize_reasoning_response(
-                            prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback
-                        )
                         router_llm = None; ds_llm = None; gc.collect()
-                        viz = self._check_3d_gate(prompt, synthesized_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                        return f"### Verified Answer\n{synthesized_answer}{viz}"
+                        viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"### Verified Answer\n{ds_answer}{viz}"
 
                     # Fetch quick helper web search context to resolve unknown concepts immediately
                     helper_search_context = ""
@@ -2917,12 +2882,9 @@ class AgentOrchestrator:
                             status_callback("DeepSeek-R1's correction VERIFIED!", "success", "deepseek_r1", 80)
                         self.memory.save(prompt, vibe_answer)
                         self.memory.save_mistake(prompt, ds_answer, pg_out, vibe_answer)
-                        synthesized_answer = self._synthesize_reasoning_response(
-                            prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback
-                        )
                         router_llm = None; ds_llm = None; gc.collect()
-                        viz = self._check_3d_gate(prompt, synthesized_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                        return f"### Verified Answer\n{synthesized_answer}{viz}"
+                        viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"### Verified Answer\n{vibe_answer}{viz}"
                     # Don't let ds_safe grow unboundedly — cap the appended errors
                     error_summary = pg_out[:300]
                     if len(ds_safe) + len(error_summary) < (ds_ctx - gen_tokens - 200) * 3:
@@ -2987,12 +2949,9 @@ class AgentOrchestrator:
                             status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
                         self.memory.save(prompt, vibe_answer)
                         self.memory.save_mistake(prompt, ds_answer, pg_out, vibe_answer)
-                        synthesized_answer = self._synthesize_reasoning_response(
-                            prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback
-                        )
                         router_llm = None; ds_llm = None; gc.collect()
-                        viz = self._check_3d_gate(prompt, synthesized_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                        return f"### Verified Answer\n{synthesized_answer}{viz}"
+                        viz = self._check_3d_gate(prompt, vibe_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"### Verified Answer\n{vibe_answer}{viz}"
             except Exception as es:
                 print(f"Emergency reasoning search recovery failed: {es}")
 
@@ -3014,12 +2973,9 @@ class AgentOrchestrator:
             except Exception as es:
                 print(f"Failed to save unverified reasoning draft: {es}")
 
-            synthesized_answer = self._synthesize_reasoning_response(
-                prompt, final_ans, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback
-            )
             router_llm = None; ds_llm = None; gc.collect()
-            viz = self._check_3d_gate(prompt, synthesized_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-            return f"### Verified Answer\n{synthesized_answer}{viz}"
+            viz = self._check_3d_gate(prompt, final_ans, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+            return f"### Verified Answer\n{final_ans}{viz}"
 
         else:
             # ── Standard LLM Debate (non-testable reasoning) ─────────────
