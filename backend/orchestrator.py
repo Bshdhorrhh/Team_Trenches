@@ -2234,9 +2234,12 @@ class AgentOrchestrator:
                 ds_ctx = min(ds_ctx_cap, est_tokens + 8192)
                 oc_ctx = min(oc_ctx_cap, self.max_auto_ctx)
         else:
-            router_ctx = min(self.context_length, router_ctx_cap)
-            ds_ctx = min(self.context_length, ds_ctx_cap)
-            oc_ctx = min(self.context_length, oc_ctx_cap)
+            # Smart context compression for benchmark tasks:
+            # HumanEval/MBPP queries are tiny. Allocating 8192 tokens of KV cache wastes VRAM.
+            # Scale down to strictly what is needed: est_tokens + system_prompt + max_generation
+            router_ctx = max(1024, min(self.context_length, router_ctx_cap, est_tokens + 1024))
+            ds_ctx = max(2048, min(self.context_length, ds_ctx_cap, est_tokens + 4096))
+            oc_ctx = max(2048, min(self.context_length, oc_ctx_cap, est_tokens + 4096))
             
         # Ensure context sizing prints to log for easier transparency
         if getattr(self, 'kaggle_hotswap_mode', False):
