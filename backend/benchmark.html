@@ -122,6 +122,11 @@
                             <input id="sampleSize" type="number" value="50" min="5" max="5000" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 focus:outline-none focus:border-blue-500 transition font-medium mono">
                         </div>
 
+                        <div class="pt-1 pb-1">
+                            <button id="btnPreload" onclick="preloadModels()" class="w-full py-3 rounded-xl bg-slate-800 border border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400 font-semibold active:scale-[0.98] transition flex justify-center items-center gap-2">
+                                <span id="preloadIcon">⚡</span> <span id="preloadText">Pre-load Models to TPU VRAM</span>
+                            </button>
+                        </div>
                         <div class="pt-2 flex gap-3">
                             <button id="btnStart" onclick="startBenchmark()" class="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 font-semibold shadow-lg shadow-blue-500/20 active:scale-[0.98] transition">
                                 Start Evaluation
@@ -389,6 +394,44 @@
             } catch (err) {
                 console.error("Error stopping benchmark:", err);
             }
+        }
+
+        async function preloadModels() {
+            const btnText = document.getElementById("preloadText");
+            const btnIcon = document.getElementById("preloadIcon");
+            const btn = document.getElementById("btnPreload");
+            
+            btn.disabled = true;
+            btnText.innerText = "Loading Models into VRAM...";
+            btnIcon.innerText = "⏳";
+            btnIcon.classList.add("animate-spin");
+            
+            try {
+                const res = await fetch("/api/load_all", { method: "POST" });
+                const data = await res.json();
+                
+                btnIcon.classList.remove("animate-spin");
+                if (data.status === "success") {
+                    btnText.innerText = "Models Loaded Successfully!";
+                    btnIcon.innerText = "✅";
+                    btn.classList.replace("bg-slate-800", "bg-emerald-500/20");
+                } else {
+                    btnText.innerText = "Load Failed";
+                    btnIcon.innerText = "❌";
+                }
+            } catch (err) {
+                console.error("Error preloading models:", err);
+                btnIcon.classList.remove("animate-spin");
+                btnText.innerText = "Error Loading Models";
+                btnIcon.innerText = "⚠️";
+            }
+            
+            setTimeout(() => {
+                btn.disabled = false;
+                btnText.innerText = "Pre-load Models to TPU VRAM";
+                btnIcon.innerText = "⚡";
+                btn.classList.replace("bg-emerald-500/20", "bg-slate-800");
+            }, 4000);
         }
 
         // Initial setup
