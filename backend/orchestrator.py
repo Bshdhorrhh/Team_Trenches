@@ -1571,8 +1571,14 @@ class AgentOrchestrator:
     def _execute_3d_generation(self, compiled_plan, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
         """Execute the actual 3D visualization generation (HTML + Plotly fallback)."""
         import re
-        # Strip all markdown code blocks (```python ... ```) from compiled_plan to prevent opencode from trying to fix/debug them
-        clean_plan = re.sub(r"```[a-zA-Z0-9_]*\n[\s\S]*?\n```", "", compiled_plan)
+        # Strip internal thinking to save massive token limits
+        clean_plan = self._strip_thinking(compiled_plan)
+        # Strip all markdown code blocks to prevent opencode from trying to fix/debug them
+        clean_plan = re.sub(r"```[a-zA-Z0-9_]*\n[\s\S]*?\n```", "", clean_plan)
+        
+        # Safety limit for context window bounds
+        if len(clean_plan) > 1500:
+            clean_plan = clean_plan[:1500]
         
         coder_llm = self._get_model("opencode", required_ctx=oc_ctx)
 
@@ -1621,7 +1627,7 @@ class AgentOrchestrator:
             "   - Toggle buttons to show/hide structural components (e.g., 'Show Backbone', 'Show Base Pairs', 'Show Hydrogen Bonds').\n"
             "   - A 'Zoom' slider or mouse scroll zoom.\n"
             "   - An info panel showing the name and function of the currently highlighted component on hover.\n\n"
-            f"Topic: {clean_plan[:3000]}"
+            f"Topic: {clean_plan}"
         )
         html_code = self._call_model(
             coder_llm, 
