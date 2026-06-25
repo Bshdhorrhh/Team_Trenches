@@ -2730,11 +2730,30 @@ class AgentOrchestrator:
     # =====================================================================
     def _reasoning_pipeline(self, prompt, enriched_prompt, router_llm,
                             router_ctx, ds_ctx, oc_ctx, gen_tokens, gen_temp, status_callback=None):
-        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback, router_llm=router_llm)
-
         # ── Check: Can this be playground-verified? ──────────────────────
         # Must check this BEFORE loading ds_llm to prevent EVM from evicting router_llm
         use_playground = self._is_playground_applicable(router_llm, prompt)
+
+        # ── Memory Contamination Guard ───────────────────────────────────
+        # When playground verification is active, STRIP past experience from
+        # the prompt. The playground independently verifies correctness, so
+        # past experience is unnecessary. Worse, it can inject stale/imprecise
+        # formulas that the model copies instead of deriving from scratch,
+        # causing the strict playground to fail on repeated identical queries.
+        if use_playground and "=== REFERENCE PAST EXPERIENCE ===" in enriched_prompt:
+            # Remove the entire past experience block
+            start_marker = "=== REFERENCE PAST EXPERIENCE ==="
+            end_marker = "================================="
+            start_idx = enriched_prompt.find(start_marker)
+            end_idx = enriched_prompt.find(end_marker, start_idx)
+            if start_idx != -1 and end_idx != -1:
+                enriched_prompt = (
+                    enriched_prompt[:start_idx].rstrip() + "\n\n" +
+                    enriched_prompt[end_idx + len(end_marker):].lstrip()
+                )
+
+        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback, router_llm=router_llm)
+
         if status_callback:
             mode = "Playground-Verified" if use_playground else "LLM Debate"
             status_callback(f"Reasoning mode: {mode}", "info", "router", 15)
