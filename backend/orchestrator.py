@@ -330,13 +330,32 @@ class AgentOrchestrator:
         # Sane bottleneck of RAM, VRAM, and hard limit
         dynamic_cap = min(hard_limit, ram_limit, vram_limit)
         
-        # Model-specific physical context ceilings to prevent VRAM OOM and RoPE overflow
+        # Model-specific physical context ceilings — scale with GPU compute capability.
+        # SM >= 9.0 (H100/B200): Flash Attention v2 + HBM3 → safe up to 65k
+        # SM >= 8.0 (A100/A6000/RTX 3090): Flash Attention v1 + HBM2e → safe up to 32k
+        # SM <  8.0 (P100/T4/V100): No flash attention, quadratic memory → cap at 8k
+        # iGPU/CPU: Uses system RAM for KV cache → bounded by RAM, safe up to 16k
+        gpu_ctx_cap = 16384  # Default for iGPU/CPU
+        if torch and torch.cuda.is_available():
+            try:
+                major, _ = torch.cuda.get_device_capability(0)
+                if major >= 9:
+                    gpu_ctx_cap = 65536   # H100, B200
+                elif major >= 8:
+                    gpu_ctx_cap = 32768   # A100, A6000, RTX 3090/4090
+                else:
+                    gpu_ctx_cap = 8192    # P100, T4, V100
+            except Exception:
+                pass
+        
+        # Per-model ceiling (all models use the same GPU-derived ceiling,
+        # but individual models can be overridden here if needed)
         model_ceilings = {
-            "router": 16384,
-            "opencode": 16384,
-            "deepseek_r1": 16384
+            "router": min(gpu_ctx_cap, 16384),       # Router doesn't need huge context
+            "opencode": gpu_ctx_cap,
+            "deepseek_r1": gpu_ctx_cap
         }
-        model_cap = model_ceilings.get(model_key, 16384)
+        model_cap = model_ceilings.get(model_key, gpu_ctx_cap)
         dynamic_cap = min(dynamic_cap, model_cap)
         
         dynamic_cap = max(1024, dynamic_cap)
