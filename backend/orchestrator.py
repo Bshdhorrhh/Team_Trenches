@@ -2358,7 +2358,7 @@ class AgentOrchestrator:
         }.get(req_lang, req_lang)
 
         logic_temp = 0.6
-        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback, router_llm=router_llm)
+        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - gen_tokens, status_callback, router_llm=router_llm)
 
         max_resets = 2
         lessons = ""
@@ -2797,7 +2797,7 @@ class AgentOrchestrator:
         use_playground = self._is_playground_applicable(router_llm, prompt)
 
 
-        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - self.max_tokens, status_callback, router_llm=router_llm)
+        ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", ds_ctx - gen_tokens, status_callback, router_llm=router_llm)
 
         if status_callback:
             mode = "Playground-Verified" if use_playground else "LLM Debate"
