@@ -160,7 +160,12 @@ class AgentOrchestrator:
                 # so we rely on the standard LRU pressure manager instead.
                 if total_vram_gb <= 24:
                     self.kaggle_hotswap_mode = True
+                    # EVM guarantees proactive model flushing before every load,
+                    # so we can safely use 95% of VRAM and RAM (only 5% reserve).
+                    self.vram_safety_gb = round(total_vram_gb * 0.05, 1)
+                    self.ram_safety_gb = round(self.total_ram_gb * 0.05, 1)
                     print(f"⚡ EVM: Enterprise VRAM Multiplexing ACTIVE (≤24GB GPU detected)")
+                    print(f"⚡ EVM: 95% utilization enabled — VRAM reserve={self.vram_safety_gb:.1f} GB, RAM reserve={self.ram_safety_gb:.1f} GB")
                 else:
                     self.kaggle_hotswap_mode = False
                         
