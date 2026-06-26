@@ -417,7 +417,7 @@ async def run_benchmark_suite(category: str, sample_size: int, orchestrator: Any
                 if num_workers == 1:
                     total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                     if total_vram_gb >= 70:
-                        num_workers = 8  # H100 / A100-80GB
+                        num_workers = 6  # Optimized sweet spot for 80GB VRAM (6 concurrent workers instead of 8)
                     elif total_vram_gb >= 35:
                         num_workers = 4  # A100-40GB / L40S
                     elif total_vram_gb >= 22:

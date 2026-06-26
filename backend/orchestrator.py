@@ -303,8 +303,14 @@ class AgentOrchestrator:
                                 freed_by_evm += self._estimate_model_size_gb(mk)
                     
                     target_model_size = self._estimate_model_size_gb(model_key)
-                    # Theoretical free VRAM after swap and load
-                    theo_free_vram = free_vram + freed_by_evm - target_model_size
+                    # Theoretical free VRAM after swap and load.
+                    # CRITICAL: If the model is already loaded, its footprint is already subtracted
+                    # from the free VRAM. Subtracting it again would double-count the model size
+                    # and artificially throttle context limits to 512 tokens.
+                    if model_key in self.loaded_models:
+                        theo_free_vram = free_vram + freed_by_evm
+                    else:
+                        theo_free_vram = free_vram + freed_by_evm - target_model_size
                     
                     # Deduct overhead for model execution (computational graph, activations)
                     usable_kv_vram = theo_free_vram - 1.5
