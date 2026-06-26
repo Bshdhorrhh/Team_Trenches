@@ -162,7 +162,12 @@ async def fetch_real_dataset(category: str) -> List[Dict[str, Any]]:
         elif category == "SWE-bench Lite":
             dataset = load_dataset("princeton-nlp/SWE-bench_Lite", split="test")
             add_log(f"Successfully loaded SWE-bench Lite dataset ({len(dataset)} items).")
-            return [{"id": item["instance_id"], "prompt": item["problem_statement"], "repo": item["repo"], "commit": item["base_commit"], "answer": "N/A"} for item in dataset]
+            return [{"id": item["instance_id"], "prompt": item["problem_statement"], "repo": item["repo"], "commit": item["base_commit"], "answer": None} for item in dataset]
+            
+        elif category == "SWE-bench Pro":
+            dataset = load_dataset("princeton-nlp/SWE-bench", split="test")
+            add_log(f"Successfully loaded SWE-bench Pro dataset ({len(dataset)} items).")
+            return [{"id": item["instance_id"], "prompt": item["problem_statement"], "repo": item["repo"], "commit": item["base_commit"], "answer": None} for item in dataset]
             
     except Exception as e:
         add_log(f"⚠️ DATASET DOWNLOAD FAILED: {str(e)}")
