@@ -400,12 +400,13 @@ class AgentOrchestrator:
         if model_obj is None:
             return False
         print(f"🧹 DMA-LRU: Evicting '{lru_key}' (least recently used)...")
-        if hasattr(model_obj, 'close'):
-            try:
-                model_obj.close()
-            except Exception as e:
-                print(f"  Warning: close() failed for '{lru_key}': {e}")
-        del model_obj
+        with self.inference_lock:
+            if hasattr(model_obj, 'close'):
+                try:
+                    model_obj.close()
+                except Exception as e:
+                    print(f"  Warning: close() failed for '{lru_key}': {e}")
+            del model_obj
         gc.collect()
         if torch:
             try:
@@ -497,17 +498,18 @@ class AgentOrchestrator:
 
     def unload_all_models(self):
         """Nuclear option: deterministically unload every cached model."""
-        for key in list(self.loaded_models.keys()):
-            model_obj = self.loaded_models[key]
-            if hasattr(model_obj, 'close'):
-                try:
-                    model_obj.close()
-                except Exception as e:
-                    print(f"Warning: Failed to close model '{key}': {e}")
-            del self.loaded_models[key]
-        
-        self.loaded_models.clear()
-        self.model_access_order.clear()
+        with self.inference_lock:
+            for key in list(self.loaded_models.keys()):
+                model_obj = self.loaded_models[key]
+                if hasattr(model_obj, 'close'):
+                    try:
+                        model_obj.close()
+                    except Exception as e:
+                        print(f"Warning: Failed to close model '{key}': {e}")
+                del self.loaded_models[key]
+            
+            self.loaded_models.clear()
+            self.model_access_order.clear()
         gc.collect()
         
         if torch:
@@ -548,15 +550,16 @@ class AgentOrchestrator:
             # Context expansion — safe reload on all platforms (including Intel iGPU/Vulkan)
             if hasattr(model_obj, "n_ctx") and required_ctx > model_obj.n_ctx():
                 print(f"🔄 Reloading '{model_key}' to expand context: {model_obj.n_ctx()} -> {required_ctx}")
-                if hasattr(model_obj, 'close'):
-                    try:
-                        model_obj.close()
-                    except Exception:
-                        pass
-                del self.loaded_models[model_key]
-                if model_key in self.model_access_order:
-                    self.model_access_order.remove(model_key)
-                del model_obj
+                with self.inference_lock:
+                    if hasattr(model_obj, 'close'):
+                        try:
+                            model_obj.close()
+                        except Exception:
+                            pass
+                    del self.loaded_models[model_key]
+                    if model_key in self.model_access_order:
+                        self.model_access_order.remove(model_key)
+                    del model_obj
                 gc.collect()
                 # ⚠️ llama-cpp-python manages its own CUDA context, independent of PyTorch.
                 # On Kaggle P100 (sm_60), PyTorch's CUDA runtime is INCOMPATIBLE and
@@ -592,17 +595,18 @@ class AgentOrchestrator:
         if getattr(self, 'kaggle_hotswap_mode', False) and self.loaded_models:
             models_to_flush = [mk for mk in list(self.loaded_models.keys()) if mk != model_key]
             if models_to_flush:
-                for mk in models_to_flush:
-                    print(f"🔄 DMA (EVM Hot-Swap): Unloading '{mk}' from VRAM...")
-                    model_obj = self.loaded_models.pop(mk, None)
-                    if mk in self.model_access_order:
-                        self.model_access_order.remove(mk)
-                    if hasattr(model_obj, 'close'):
-                        try:
-                            model_obj.close()
-                        except Exception:
-                            pass
-                    del model_obj
+                with self.inference_lock:
+                    for mk in models_to_flush:
+                        print(f"🔄 DMA (EVM Hot-Swap): Unloading '{mk}' from VRAM...")
+                        model_obj = self.loaded_models.pop(mk, None)
+                        if mk in self.model_access_order:
+                            self.model_access_order.remove(mk)
+                        if hasattr(model_obj, 'close'):
+                            try:
+                                model_obj.close()
+                            except Exception:
+                                pass
+                        del model_obj
                 gc.collect()
                 # Use time.sleep instead of torch.cuda.synchronize which crashes on P100
                 try:
