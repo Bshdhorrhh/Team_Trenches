@@ -286,12 +286,23 @@ async def execute_task_on_tpu(worker_id: int, category: str, problem: Dict[str, 
                         if entry_point and f"def {entry_point}" not in extracted_code:
                             extracted_code = problem.get("prompt", "") + extracted_code
                         
-                        # Automatically inject standard typing imports to prevent false-negative NameErrors
-                        # (Many models write PEP 484 type hints like List, Dict, Tuple without importing them).
-                        typing_imports = "from typing import List, Dict, Tuple, Set, Optional, Union, Any, Callable\n\n"
+                        # Automatically inject standard typing, math, and numpy imports to prevent false-negative NameErrors
+                        typing_imports = (
+                            "from typing import List, Dict, Tuple, Set, Optional, Union, Any, Callable\n"
+                            "import math\n"
+                            "import numpy as np\n\n"
+                        )
                         
-                        # Append the hidden test cases from the dataset
-                        test_code = typing_imports + extracted_code + "\n\n" + problem["test"]
+                        # Prepend the official prompt. This guarantees that any helper functions,
+                        # imports, or class definitions defined in the prompt (like 'poly' in HE/32
+                        # or 'encode_cyclic' in HE/38) are fully preserved. Python's natural redefinition
+                        # rules ensure the model's solution will overwrite the prompt signature cleanly.
+                        prompt_clean = problem.get("prompt", "")
+                        
+                        if prompt_clean.strip() in extracted_code:
+                            test_code = typing_imports + extracted_code + "\n\n" + problem["test"]
+                        else:
+                            test_code = typing_imports + prompt_clean + "\n" + extracted_code + "\n\n" + problem["test"]
                         
                         # HumanEval: The dataset defines check(candidate) but never calls it.
                         # We must physically invoke it to trigger the assertions.
