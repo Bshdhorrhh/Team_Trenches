@@ -259,15 +259,21 @@ async def execute_task_on_tpu(worker_id: int, category: str, problem: Dict[str, 
                     else:
                         success = False
                 else:
-                    # Fallback for datasets without programmatic test blocks
-                    lower_resp = response.lower()
-                    has_error = any(err in lower_resp for err in [
-                        "traceback (most recent call last)",
-                        "timeouterror:",
-                        "syntaxerror:",
-                        "assertionerror:"
-                    ])
-                    success = not has_error
+                    # Fallback for theoretical/math datasets without programmatic test blocks (GPQA, GSM8K, MATH)
+                    if "answer" in problem and problem["answer"]:
+                        expected_answer = str(problem["answer"]).strip().lower()
+                        if "####" in expected_answer:
+                            expected_answer = expected_answer.split("####")[-1].strip()
+                        success = expected_answer in response.lower()
+                    else:
+                        lower_resp = response.lower()
+                        has_error = any(err in lower_resp for err in [
+                            "traceback (most recent call last)",
+                            "timeouterror:",
+                            "syntaxerror:",
+                            "assertionerror:"
+                        ])
+                        success = not has_error
                     
                 generated_tokens = len(response) // 4
             except Exception as e:
