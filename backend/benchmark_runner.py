@@ -243,21 +243,49 @@ async def execute_task_on_tpu(worker_id: int, category: str, problem: Dict[str, 
                     status_cb
                 )
                 
-                # Accurately determine success by running the exact hidden unit tests like OpenAI/Anthropic
+                # ── Industry-Standard Code Evaluation (BigCode / OpenAI Protocol) ──
+                # This mirrors the exact evaluation used by the official HumanEval leaderboard:
+                # 1. Extract the code block containing the entry_point function definition
+                # 2. Append the hidden unit tests from the dataset
+                # 3. Call check(entry_point) to physically trigger all assertions
+                # 4. Grade based on sandbox exit code (0 = PASS, non-zero = FAIL)
                 if "test" in problem and problem["test"] and category in ["HumanEval", "MBPP"]:
                     import re
-                    # Extract all Python code blocks and take the LAST one (which is the final verified output)
+                    entry_point = problem.get("entry_point", "")
+                    
+                    # Extract all ```python code blocks from the AI's markdown response
                     matches = re.findall(r"```python\s*(.*?)\s*```", response, re.DOTALL | re.IGNORECASE)
+                    
                     if matches:
-                        extracted_code = matches[-1]
-                        # Append the hidden test cases from the dataset directly to the code
+                        # Strategy 1: Find the specific block that defines the entry_point function
+                        # This prevents grabbing a "usage example" block instead of the solution
+                        extracted_code = None
+                        if entry_point:
+                            for block in matches:
+                                if f"def {entry_point}" in block:
+                                    extracted_code = block
+                                    break  # Use the FIRST block containing the definition
+                        
+                        # Strategy 2: If no single block has it, join ALL blocks together
+                        # (the function may be in block 1 and helper functions in block 2)
+                        if extracted_code is None:
+                            extracted_code = "\n\n".join(matches)
+                        
+                        # Strategy 3 (HumanEval completion-style): If the entry_point function
+                        # is STILL not defined, the model likely output just the function body.
+                        # Prepend the official prompt (which contains the function signature).
+                        if entry_point and f"def {entry_point}" not in extracted_code:
+                            extracted_code = problem.get("prompt", "") + extracted_code
+                        
+                        # Append the hidden test cases from the dataset
                         test_code = extracted_code + "\n\n" + problem["test"]
                         
-                        # HumanEval requirement: The dataset defines a check(candidate) function, but we must actively call it!
-                        if "entry_point" in problem and problem["entry_point"]:
-                            test_code += f"\n\ncheck({problem['entry_point']})"
+                        # HumanEval: The dataset defines check(candidate) but never calls it.
+                        # We must physically invoke it to trigger the assertions.
+                        if entry_point:
+                            test_code += f"\n\ncheck({entry_point})"
                             
-                        # Use the secure sandbox to run the final graded code
+                        # Execute in the secure sandbox and grade on exit code
                         is_success, output = await asyncio.to_thread(orchestrator.sandbox.execute, test_code, "python")
                         success = is_success
                     else:
