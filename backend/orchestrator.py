@@ -676,6 +676,9 @@ class AgentOrchestrator:
                 kwargs["n_batch"] = 512
                 kwargs["n_ubatch"] = 256
                 kwargs["flash_attn"] = False
+            else:
+                print("⚡ DMA: Modern Enterprise GPU detected! Enabling Hardware Flash Attention.")
+                kwargs["flash_attn"] = True
 
             # Dual-GPU: balance VRAM by distributing the heavy models across both cards
             if self.dual_gpu_pipeline:
