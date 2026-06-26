@@ -333,7 +333,19 @@ async def run_benchmark_suite(category: str, sample_size: int, orchestrator: Any
         import torch
         if torch.cuda.is_available():
             num_workers = max(1, torch.cuda.device_count())
-            hardware_name = f"Dual T4 GPU (x{num_workers} cores)" if num_workers == 2 else f"Nvidia GPU (x{num_workers} cores)"
+            try:
+                # Dynamically scale workers based on VRAM capacity on massive single GPUs
+                if num_workers == 1:
+                    total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                    if total_vram_gb >= 70:
+                        num_workers = 8  # H100 / A100-80GB
+                    elif total_vram_gb >= 35:
+                        num_workers = 4  # A100-40GB / L40S
+                    elif total_vram_gb >= 22:
+                        num_workers = 2  # L4-24GB
+            except Exception:
+                pass
+            hardware_name = f"Nvidia GPU (x{num_workers} Parallel Workers)"
         else:
             num_workers = 8
             hardware_name = "TPU v5e-8 Host CPU (x8 cores)"
