@@ -868,7 +868,7 @@ class AgentOrchestrator:
 
         # Precise Token Estimation
         if hasattr(router_llm, "tokenize"):
-            est_tokens = len(router_llm.tokenize(prompt.encode('utf-8')))
+            est_tokens = len(self.safe_tokenize(router_llm, prompt.encode('utf-8')))
         else:
             est_tokens = len(prompt) // 3
 
@@ -935,7 +935,7 @@ class AgentOrchestrator:
         max_middle_tokens = max(512, n_ctx - max_summary_tokens - chat_template_overhead)
         
         if hasattr(router_llm, "tokenize"):
-            est_middle_tokens = len(router_llm.tokenize(middle_chunk.encode('utf-8')))
+            est_middle_tokens = len(self.safe_tokenize(router_llm, middle_chunk.encode('utf-8')))
         else:
             est_middle_tokens = len(middle_chunk) // 3
             
@@ -953,7 +953,7 @@ class AgentOrchestrator:
         
         # Post-crunch verification: if crunched output STILL exceeds budget, hard-truncate
         if hasattr(router_llm, "tokenize"):
-            final_tokens = len(router_llm.tokenize(crunched.encode('utf-8')))
+            final_tokens = len(self.safe_tokenize(router_llm, crunched.encode('utf-8')))
         else:
             final_tokens = len(crunched) // 3
         if final_tokens > prompt_token_budget:
@@ -964,6 +964,13 @@ class AgentOrchestrator:
             crunched = crunched[:top_keep] + "\n...[HARD TRUNCATED TO FIT CONTEXT]...\n" + crunched[-bottom_keep:]
             
         return crunched
+
+    def safe_tokenize(self, llm, text_bytes):
+        """Thread-safe wrapper for llama.cpp tokenization to prevent concurrent C-level segfaults."""
+        if hasattr(llm, "tokenize"):
+            with self.inference_lock:
+                return llm.tokenize(text_bytes)
+        return []
 
     # =========================================================================
     # DRY Helper: Call any model (TransformerWrapper or GGUF)
@@ -980,9 +987,9 @@ class AgentOrchestrator:
             ctx = llm.n_ctx()
             # Precise Token Estimation
             if hasattr(llm, "tokenize"):
-                est_prompt_tokens = len(llm.tokenize(prompt.encode('utf-8'))) + 120
+                est_prompt_tokens = len(self.safe_tokenize(llm, prompt.encode('utf-8'))) + 120
                 if system_prompt:
-                    est_prompt_tokens += len(llm.tokenize(system_prompt.encode('utf-8')))
+                    est_prompt_tokens += len(self.safe_tokenize(llm, system_prompt.encode('utf-8')))
             else:
                 est_prompt_tokens = len(prompt) // 3 + 120
                 if system_prompt:
@@ -1033,7 +1040,7 @@ class AgentOrchestrator:
                     
                 prompt = '\n'.join(start_lines) + "\n...[TRUNCATED FOR CONTEXT LIMIT]...\n" + '\n'.join(end_lines)
                 if hasattr(llm, "tokenize"):
-                    est_prompt_tokens = len(llm.tokenize(prompt.encode('utf-8'))) + 120
+                    est_prompt_tokens = len(self.safe_tokenize(llm, prompt.encode('utf-8'))) + 120
                 else:
                     est_prompt_tokens = len(prompt) // 3 + 120
             
