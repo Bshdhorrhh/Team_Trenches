@@ -526,6 +526,14 @@ class AgentOrchestrator:
         if required_ctx is None:
             required_ctx = self.context_length if self.context_length > 0 else 8192
 
+        # CRITICAL SEGFAULT PREVENTION: llama.cpp has a known C-level double-free segfault
+        # when a GGUF model is closed and re-initialized in the same process to expand context.
+        # To completely prevent this, we enforce a context floor of 8192 (or the model's ceiling)
+        # for all GPU loads so the model is loaded with a large context once and NEVER has to reload.
+        if torch and torch.cuda.is_available():
+            ceiling = self._get_dynamic_context_ceiling(model_key)
+            required_ctx = max(required_ctx, min(8192, ceiling))
+
         # Fast path: read-cache check without locking to maximize throughput
         if model_key in self.loaded_models:
             model_obj = self.loaded_models[model_key]
