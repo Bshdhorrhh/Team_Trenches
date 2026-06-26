@@ -151,14 +151,18 @@ class AgentOrchestrator:
                 total_vram_gb = total_vram / (1024 ** 3)
                 self.vram_safety_gb = round(total_vram_gb * 0.40, 1)  # 40% reserve
                 
-                # ── Kaggle dGPU Hot-Swap Mode Disabled ──
-                # We disable aggressive hot-swapping and instead rely on the high-fidelity
-                # LRU memory pressure manager (`_check_memory_pressure`) and the OS page cache.
-                # All models can load and remain in VRAM if they fit (e.g., all three text models
-                # fit in 15-16GB VRAM simultaneously). If VRAM is full, the LRU manager will
-                # automatically swap the oldest model out of VRAM, keeping its file cached
-                # in the fast system RAM (OS page cache) for instant reloading later.
-                self.kaggle_hotswap_mode = False
+                # ── EVM (Enterprise VRAM Multiplexing) Hot-Swap Mode ──
+                # On GPUs with ≤24GB VRAM (P100, T4, L4), all 3 text models (~14GB total)
+                # barely fit simultaneously. Passive LRU eviction triggers too late (at 40%
+                # threshold) and risks OOM during model loads. EVM proactively flushes the
+                # least-recently-used model BEFORE loading a new one, ensuring there is always
+                # enough VRAM headroom. On larger GPUs (A100/H100), all models fit comfortably
+                # so we rely on the standard LRU pressure manager instead.
+                if total_vram_gb <= 24:
+                    self.kaggle_hotswap_mode = True
+                    print(f"⚡ EVM: Enterprise VRAM Multiplexing ACTIVE (≤24GB GPU detected)")
+                else:
+                    self.kaggle_hotswap_mode = False
                         
                 print(f"🎮 DMA: NVIDIA GPU detected — {total_vram_gb:.0f} GB VRAM, "
                       f"evict threshold = {self.vram_safety_gb:.1f} GB free")
