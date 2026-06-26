@@ -2453,7 +2453,7 @@ class AgentOrchestrator:
         # Determine language constraints
         prompt_lower = prompt.lower()
         req_lang = "python"
-        if "javascript" in prompt_lower or " js " in prompt_lower or " node " in prompt_lower:
+        if "javascript" in prompt_lower or " js " in prompt_lower or "node.js" in prompt_lower or "nodejs" in prompt_lower or "node js" in prompt_lower or "node-js" in prompt_lower:
             req_lang = "javascript"
         elif "typescript" in prompt_lower or " ts " in prompt_lower:
             req_lang = "typescript"
