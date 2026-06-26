@@ -151,30 +151,14 @@ class AgentOrchestrator:
                 total_vram_gb = total_vram / (1024 ** 3)
                 self.vram_safety_gb = round(total_vram_gb * 0.40, 1)  # 40% reserve
                 
-                # ── Kaggle dGPU Hot-Swap Mode Detection ──
-                # If System RAM is massive (>24GB) but VRAM is restricted (<=16GB)
-                # and we only have a single GPU (not Dual-GPU setup).
-                if self.total_ram_gb >= 24 and total_vram_gb <= 16 and not self.dual_gpu_pipeline:
-                    ram_percent = psutil.virtual_memory().percent
-                    is_kaggle = os.environ.get('KAGGLE_KERNEL_RUN_TYPE') is not None or os.path.exists('/kaggle')
-                    # Activate if we are in Kaggle or have enough free memory (RAM usage < 25%)
-                    if is_kaggle or ram_percent < 25.0:
-                        self.kaggle_hotswap_mode = True
-                        # ── EVM Resource Override ──────────────────────────
-                        # In EVM mode, only ONE model is ever in VRAM at a time,
-                        # and System RAM is a dedicated holding area.
-                        # Safe to use 90-95% of all resources.
-                        # RAM:  keep only 5% free (~1.5 GB on 31 GB) for OS kernel
-                        # VRAM: keep only 5% free (~0.8 GB on 16 GB) for CUDA runtime
-                        self.ram_safety_gb = round(self.total_ram_gb * 0.05, 1)
-                        self.vram_safety_gb = round(total_vram_gb * 0.05, 1)
-                        print("🚀 DMA: Activated EVM (Enterprise VRAM Multiplexing)!")
-                        print(f"   ⚡ EVM Override: RAM threshold = {self.ram_safety_gb:.1f} GB "
-                              f"(95% usable of {self.total_ram_gb:.0f} GB)")
-                        print(f"   ⚡ EVM Override: VRAM threshold = {self.vram_safety_gb:.1f} GB "
-                              f"(95% usable of {total_vram_gb:.0f} GB)")
-                    else:
-                        print(f"⚠️ DMA: Hot-Swap skipped — RAM usage too high ({ram_percent:.1f}%)")
+                # ── Kaggle dGPU Hot-Swap Mode Disabled ──
+                # We disable aggressive hot-swapping and instead rely on the high-fidelity
+                # LRU memory pressure manager (`_check_memory_pressure`) and the OS page cache.
+                # All models can load and remain in VRAM if they fit (e.g., all three text models
+                # fit in 15-16GB VRAM simultaneously). If VRAM is full, the LRU manager will
+                # automatically swap the oldest model out of VRAM, keeping its file cached
+                # in the fast system RAM (OS page cache) for instant reloading later.
+                self.kaggle_hotswap_mode = False
                         
                 print(f"🎮 DMA: NVIDIA GPU detected — {total_vram_gb:.0f} GB VRAM, "
                       f"evict threshold = {self.vram_safety_gb:.1f} GB free")
@@ -634,9 +618,9 @@ class AgentOrchestrator:
         # Skip memory pressure check if EVM already cleared VRAM — the pressure
         # check runs torch.cuda.synchronize() internally which can crash on P100 (sm_60)
         if not evm_flushed:
-            target_gpu = None
+            target_gpu = 0
             if self.dual_gpu_pipeline:
-                if model_key in ["deepseek_r1", "opencode"]:
+                if model_key in ["deepseek_r1", "qwen_vl"]:
                     target_gpu = 1
                 else:
                     target_gpu = 0
