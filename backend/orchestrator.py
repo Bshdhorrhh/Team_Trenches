@@ -672,6 +672,11 @@ class AgentOrchestrator:
                 "n_gpu_layers": self.gpu_layers if self.device_mode != "cpu" else 0,
                 "verbose": False
             }
+            # Kaggle Input Speedup: /kaggle/input is a slow network-attached mount.
+            # Disabling mmap forces the model weights to be loaded entirely into fast system RAM
+            # at startup, avoiding slow on-demand network reads during generation.
+            if "/kaggle/input" in model_path or "kaggle" in model_path.lower():
+                kwargs["use_mmap"] = False
             # Restrict batch sizes and disable flash attention on older GPUs (like P100/T4)
             # to prevent self-attention scratch buffer VRAM spikes and CUDA crashes.
             is_older_gpu = False
