@@ -1349,7 +1349,7 @@ class AgentOrchestrator:
         # Redirect all playground script writing to the Router to prevent DeepSeek-R1 thinking tokens
         # from depleting the context window and causing code truncation, or VibeThinker syntax errors.
         if purpose == "reasoning" or model_key in ["deepseek_r1"]:
-            coder_model = self._get_model("router", required_ctx=8192)
+            coder_model = self._get_model("opencode", required_ctx=8192)
 
         # Classify the domain of the query
         domain = "general"
@@ -1449,7 +1449,7 @@ class AgentOrchestrator:
         if not success and test_code:
             is_syntax_error = any(e in output for e in ["SyntaxError", "ModuleNotFoundError", "NameError", "IndentationError", "TypeError", "AttributeError", "ValueError"])
             if is_syntax_error:
-                router_linter = self._get_model("router", required_ctx=8192)
+                router_linter = self._get_model("opencode", required_ctx=8192)
                 lint_p = (
                     "You are a fast Python Syntax Linter.\n"
                     f"The playground verification script failed with this error:\n{output[:600]}\n\n"
