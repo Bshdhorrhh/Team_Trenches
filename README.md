@@ -234,6 +234,35 @@ Executes generated code safely inside a 3-tier isolated environment:
 
 ---
 
+## 📂 Directory Structure
+
+Below is the layout of the project directories and the purpose of each primary code module:
+
+```
+Team_Trenches/
+├── backend/
+│   ├── app.py                # FastAPI main application server & endpoint handlers
+│   ├── orchestrator.py       # Core Multi-Agent Orchestrator & Pipeline logic
+│   ├── downloader.py         # Multi-threaded Hugging Face model downloader
+│   ├── memory.py             # Memory controllers & RAG database manager
+│   ├── sandbox.py            # Code execution environments & verification sandbox
+│   ├── search.py             # Web search integrations (DuckDuckGo, etc.)
+│   ├── repo_map.py           # Helper script for repository structures
+│   └── benchmark_runner.py   # Benchmark execution and reporting engine
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx           # Main React component (dynamic UI, glassmorphic layout, stream parsers)
+│   │   └── main.jsx          # React initialization script
+│   ├── package.json          # Node package dependencies & configurations
+│   ├── index.html            # Main Single Page Application template
+│   └── vite.config.js        # Vite compilation configuration
+├── start.sh                  # One-click startup script (starts backend + frontend simultaneously)
+├── requirements.txt          # Python backend package dependencies
+└── README.md                 # Project main documentation
+```
+
+---
+
 ## 🖥️ System Requirements & Setup
 
 | Resource | Minimum | Recommended |
