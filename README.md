@@ -72,7 +72,7 @@ Web Search    Execution       Sandbox         Data Cleaning    OpenCodeDS     Re
 ```
 
 <p align="center">
-  <img src="assets/architecture_diagram.png" alt="DeepThinker Multi-Agent Pipeline Architecture" width="800"/>
+  <img src="assets/pipeline_architecture.png" alt="DeepThinker Multi-Agent Pipeline Architecture" width="800"/>
 </p>
 
 ### Routing Pathways
@@ -117,10 +117,6 @@ Executes generated code safely inside a 3-tier isolated environment:
 * **Languages Supported:** Python, C, C++, Java, JavaScript, Go, Rust, Bash, TypeScript.
 * **Libraries Pre-Whitelisted:** `numpy`, `scipy`, `pandas`, `sklearn`, `plotly`, `sympy`, `networkx`, `z3-solver`.
 * **Reflexion Loop:** Code syntax or runtime errors automatically spawn self-correction loops to repair the code before outputting results.
-
-<p align="center">
-  <img src="assets/coding_pipeline_architecture.png" alt="Dual Sandbox Coding & Reflexion Architecture" width="800"/>
-</p>
 
 ---
 
