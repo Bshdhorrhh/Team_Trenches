@@ -73,93 +73,90 @@ Web Search    Execution       Sandbox         Data Cleaning    OpenCodeDS     Re
 
 ```mermaid
 flowchart TD
-    %% ── INPUT & VISION ──
-    USER([👨‍💻 User Prompt & Uploaded Image]) --> INPUT{Has Image?}
+    %% ── TOP-LEVEL INGESTION ──
+    USER([User Prompt]) --> ROUTER["Router: Phi-3.5 Mini"]
     
-    INPUT -->|Yes| QWEN_VL[👁️ Qwen-2.5-VL 7B Vision Parser]
-    INPUT -->|No| ROUTER
-    QWEN_VL -->|Transcribed Text Context| ROUTER[🧭 Phi-3.5 Mini Intent Router]
+    ROUTER -->|Search Query Triggered| OPT_QUERY["Phi 3.5 Mini: Generate optimized query"]
+    OPT_QUERY --> SCRAPE["Scrape Web Snippets & Live Data"]
+    SCRAPE --> CLASSIFY["Phi-3.5 Mini: Intent Classification"]
+    
+    ROUTER -->|No Search| CLASSIFY
 
-    %% ── INTENT ROUTER ──
-    ROUTER -->|Classifies Intent| PATHS{Select Pathway}
+    %% ── Intent Classification Branches ──
+    CLASSIFY --> PATH_SIMPLE["1. SIMPLE"]
+    CLASSIFY --> PATH_REASONING["2. REASONING"]
+    CLASSIFY --> PATH_CODING["3. CODING"]
+    CLASSIFY --> PATH_PREDICT["4. PREDICTION"]
+    CLASSIFY --> PATH_3D["5. 3D VIZ"]
+    CLASSIFY --> PATH_EXTREME["6. EXTREME WEBSEARCH"]
 
-    %% ── 6-WAY PIPELINE PATHWAYS ──
-    PATHS -->|1. SIMPLE| PATH_SIMPLE[General & Simple Queries]
-    PATHS -->|2. CODING| PATH_CODING[Software Engineering Tasks]
-    PATHS -->|3. REASONING| PATH_REASONING[Mathematical & Logic Problems]
-    PATHS -->|4. PREDICTION| PATH_PREDICTION[Data Analysis & Forecasting]
-    PATHS -->|5. EXTREME SEARCH| PATH_EXTREME[Deep Research & Document Synthesis]
-    PATHS -->|6. 3D VIZ| PATH_3D[WebGL & Three.js 3D Simulations]
+    %% ── 1. SIMPLE PATHWAY ──
+    PATH_SIMPLE --> SIMPLE_ANS["Phi-3.5 Mini: Answer directly with web context"]
 
-    %% ── PATHWAY INTERNAL LOOPS ──
-    subgraph PathSimple [Simple Pipeline]
-        PATH_SIMPLE --> DDG[🌐 DuckDuckGo Search]
-        DDG --> PHI_ANS[Phi-3.5 Mini Direct Answer]
-    end
+    %% ── 2. REASONING PATHWAY ──
+    PATH_REASONING --> VT_DRAFT["VibeThinker 3B: Draft Math/Logic Plan"]
+    VT_DRAFT --> OC_TEST["OpenCodeInterpreter 7B: Write Python Verification Script"]
+    OC_TEST --> REASON_SB{"Execution Sandbox"}
+    
+    REASON_SB -->|Verified Success| REASON_PASS["Pass logic plan to Coding or Output"]
+    REASON_SB -->|Crash/Failure| REASON_FAIL["Emergency Web Search"]
+    REASON_FAIL --> DS_MATH_FIX["DeepSeek R1-7B: Correct logic plan using SearchQA web facts"]
+    DS_MATH_FIX --> REASON_SB
 
-    subgraph PathCoding [Coding Pipeline]
-        PATH_CODING --> DS_DRAFT[⚡ DeepSeek R1 Logic Draft]
-        DS_DRAFT --> OC_GEN[💻 OpenCodeInterpreter 7B Gen]
-        OC_GEN --> PY_SANDBOX{🛡️ Isolated Polyglot Sandbox}
-        PY_SANDBOX -->|Code Error| OC_FIX[OpenCodeInterpreter Fix Loop]
-        OC_FIX --> PY_SANDBOX
-        PY_SANDBOX -->|Passed| CODING_OUT[Verified Code Output]
-    end
+    %% ── 3. CODING PATHWAY ──
+    PATH_CODING --> OC_DRAFT["OpenCodeInterpreter 7B: Draft Python/JS Script"]
+    OC_DRAFT --> CODING_SB{"Execution Sandbox"}
+    
+    CODING_SB -->|Verified Success| CODE_PASS["Output final Verified Code Block"]
+    CODING_SB -->|Syntax Error| CODE_LINT["OpenCode Linter: Patch specific error"]
+    CODE_LINT --> CODING_SB
+    
+    CODING_SB -->|Logic Error| CODE_FIX["Reflexion Loop: OpenCode attempts logic fix"]
+    CODE_FIX --> CODING_SB
+    CODE_FIX -->|Escalate| DS_CODE_FIX["DeepSeek R1-7B corrects code using traceback"]
+    DS_CODE_FIX --> CODING_SB
 
-    subgraph PathReasoning [Reasoning Pipeline]
-        PATH_REASONING --> VT_PLAN[🧠 VibeThinker 3B Math Logic Plan]
-        VT_PLAN --> RS_VERIFY{🧮 Reasoning Sandbox Verify}
-        RS_VERIFY -->|Math Assertion Fail| VT_PLAN
-        RS_VERIFY -->|Passed| REASONING_OUT[Logical Proof & Derivations]
-    end
+    %% ── 4. PREDICTION PATHWAY ──
+    PATH_PREDICT --> P_VRAM["Expand VRAM Context Limits"]
+    P_VRAM --> P_SPEC["OpenCodeInterpreter 7B: ML/Data Science Specialization Prompt"]
+    P_SPEC --> P_DRAFT["Draft Pandas/Scikit-learn Regression Script"]
+    P_DRAFT --> P_SB{"Sandbox Execution: Load Web Scraped Arrays"}
+    
+    P_SB -->|Verified Success| P_PASS["Parse 'PREDICTIVE_METRICS' JSON & Render Forecast UI"]
+    P_SB -->|Data Format Error/NaN| P_CLEAN["Data Cleaning Loop: OpenCode fixes array shapes"]
+    P_CLEAN --> P_SB
 
-    subgraph PathPrediction [Prediction Pipeline]
-        PATH_PREDICTION --> PREDICT_SCRAPE[🌐 DuckDuckGo Web Scrape]
-        PREDICT_SCRAPE --> SK_PLAN[💻 OpenCodeInterpreter 7B Data Sci Script]
-        SK_PLAN --> DS_SANDBOX{📊 Scikit-Learn Data Cleaning Sandbox}
-        DS_SANDBOX -->|NaN / Infinite Residues| SK_CLEAN[Data Cleaning Loop]
-        SK_CLEAN --> DS_SANDBOX
-        DS_SANDBOX -->|Passed| PREDICT_OUT[Forecasting Plots & Stats]
-    end
+    %% ── 5. 3D VIZ PATHWAY ──
+    PATH_3D --> VIZ_DRAFT["OpenCodeInterpreter 7B: Generate HTML (JS WebGL)"]
+    VIZ_DRAFT --> VIZ_SB{"Node.js Sandbox: Verify syntax and DOM API logic"}
+    
+    VIZ_SB -->|Syntax Error| VIZ_LINT["OpenCode Linter: Fix JavaScript Error"]
+    VIZ_LINT --> VIZ_SB
+    VIZ_SB -->|Success| VIZ_PASS["Output Interactive HTML to Frontend Frame"]
 
-    subgraph PathExtreme [Extreme Search Pipeline]
-        PATH_EXTREME --> EXT_SCRAPE[🌐 Multi-Source Deep Search]
-        EXT_SCRAPE --> DS_R1_SYN[⚡ DeepSeek R1 Synthesize & Compare]
-        DS_R1_SYN --> OC_PLOT[💻 OpenCode Plotly Script Gen]
-        OC_PLOT --> PLOTLY_SANDBOX{📈 Plotly JSON Execution Sandbox}
-        PLOTLY_SANDBOX -->|Plotly Error| OC_PLOT
-        PLOTLY_SANDBOX -->|Passed| EXTREME_OUT[Deep Analytical Report + Interactive Charts]
-    end
+    %% ── 6. EXTREME WEBSEARCH PATHWAY ──
+    PATH_EXTREME --> EXT_VRAM["Expand VRAM to Absolute Max Limit"]
+    EXT_VRAM --> DS_COMPARE["DeepSeek R1-7B: Deep Document Comparison & Data Structuring"]
+    DS_COMPARE --> EXT_REPORT["Generate Comprehensive Analytical Report"]
+    EXT_REPORT --> EXT_PASS_OC["Pass structured data to OpenCodeInterpreter"]
+    EXT_PASS_OC --> EXT_PLOT["Draft Python Plotly Script: Piecharts, Barcharts, Trends"]
+    EXT_PLOT --> EXT_SB{"Execution Sandbox: Verify JSON Output"}
+    EXT_SB -->|Success| EXT_PASS["Output Deep Analysis Report + Interactive Charts"]
 
-    subgraph Path3D [3D Visualization Pipeline]
-        PATH_3D --> OC_WebGL[💻 OpenCode HTML/WebGL Canvas Gen]
-        OC_WebGL --> WebGL_SANDBOX{🎨 Three.js / Plotly.js Sandbox}
-        WebGL_SANDBOX -->|WebGL / DOM Error| OC_WebGL
-        WebGL_SANDBOX -->|Passed| WebGL_OUT[Live Interactive Glassmorphic Simulation]
-    end
-
-    %% ── CONTEXT MEMORY RAG ──
-    CHROMA[(🗄️ ChromaDB Vector RAG)] <-->|Save / Recall Logic| ROUTER
-
-    %% ── HARDWARE CONTROL ──
-    subgraph Hardware [Hardware Allocation Engine]
-        DMA[⚖️ Dynamic Memory Allocator]
-        DMA <-->|LRU Model Swap: RAM ↔ VRAM| GPU_VRAM[🟩 GPU VRAM / Intel XPU]
-    end
-
-    PHI_ANS & CODING_OUT & REASONING_OUT & PREDICT_OUT & EXTREME_OUT & WebGL_OUT --> OUT_RENDER[💻 React Frontend UI]
+    %% ── FINAL RENDERING TERMINUS ──
+    SIMPLE_ANS & REASON_PASS & CODE_PASS & P_PASS & VIZ_PASS & EXT_PASS --> RENDER_UI["💻 React Frontend UI / Chat Output"]
 
     %% ── STYLING ──
     classDef default fill:#1E1E1E,stroke:#4A4A4A,stroke-width:2px,color:#FFF;
-    classDef router fill:#5E2750,stroke:#9C27B0,stroke-width:2px,color:#FFF;
+    classDef gateway fill:#2D3748,stroke:#4A5568,stroke-width:2px,color:#FFF;
+    classDef routing fill:#5E2750,stroke:#9C27B0,stroke-width:2px,color:#FFF;
     classDef sandbox fill:#E65100,stroke:#FF9800,stroke-width:2px,color:#FFF;
-    classDef memory fill:#1B5E20,stroke:#4CAF50,stroke-width:2px,color:#FFF;
-    classDef hardware fill:#45475a,stroke:#94e2d5,stroke-width:2px,color:#FFF;
+    classDef terminal fill:#1B5E20,stroke:#4CAF50,stroke-width:2px,color:#FFF;
     
-    class ROUTER,PATHS router;
-    class PY_SANDBOX,RS_VERIFY,DS_SANDBOX,PLOTLY_SANDBOX,WebGL_SANDBOX sandbox;
-    class CHROMA memory;
-    class DMA,GPU_VRAM hardware;
+    class USER,ROUTER,OPT_QUERY,SCRAPE,CLASSIFY gateway;
+    class PATH_SIMPLE,PATH_REASONING,PATH_CODING,PATH_PREDICT,PATH_3D,PATH_EXTREME routing;
+    class REASON_SB,CODING_SB,P_SB,VIZ_SB,EXT_SB sandbox;
+    class RENDER_UI terminal;
 ```
 
 ### Routing Pathways
