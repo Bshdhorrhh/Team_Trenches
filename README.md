@@ -306,17 +306,6 @@ Open `http://localhost:5173` in your web browser. Model weights will download au
 
 DeepThinker has undergone a comprehensive system audit to verify code quality, structure, and execution safety before submission.
 
-### Codebase Metrics
-* **Total Lines of Code:** **9,179 lines**
-* **Repository Architecture:** Decoupled React-Vite client and FastAPI asynchronous backend.
-
-| Component | Total Files | Lines of Code | Primary Role |
-| :--- | :--- | :--- | :--- |
-| **Backend (Python)** | 9 | 6,383 | Asynchronous gateways, model routers, EVM swapping controller, isolated sandboxes. |
-| **Frontend (React)** | 2 | 2,796 | Interactive glassmorphic interface, Plotly/Three.js sandbox wrappers, stream parser. |
-| **Orchestration/Configs** | 3 | 556 | Startup scripting, dependency definitions, system README setups. |
-| **Total Project Size** | **14** | **9,179** | **100% locally-run Multi-Agent MoE platform** |
-
 ### Core Architectural Features Audited & Verified
 1. **📦 Automated Model Ingestion (`downloader.py`):**
    * Multi-threaded model downloader with automatic SHA-256 checksum verification.
