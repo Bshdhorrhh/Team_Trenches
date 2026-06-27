@@ -339,17 +339,18 @@ const ArtifactSandbox = ({ htmlCode }) => {
         
         const loadList = [];
         const inlineCodes = [];
+        let bodyOnloadCode = null;
 
         // CRITICAL FIX: Prevent body onload from firing before our sequential loader finishes.
         // If the LLM generated `<body onload="init()">`, it would execute immediately 
         // upon iframeDoc.write, throwing "Plotly is not defined".
         // Instead of just deleting it, we capture the initialization code and queue it 
-        // to run safely at the very end of our loader.
+        // to run safely at the very end of our loader, after all script blocks have been parsed.
         if (tempDoc.body && tempDoc.body.hasAttribute("onload")) {
           const onloadCode = tempDoc.body.getAttribute("onload");
           tempDoc.body.removeAttribute("onload");
           if (onloadCode && onloadCode.trim()) {
-            inlineCodes.push(onloadCode);
+            bodyOnloadCode = onloadCode;
           }
         }
 
@@ -364,6 +365,11 @@ const ArtifactSandbox = ({ htmlCode }) => {
           }
           s.parentNode.removeChild(s);
         });
+
+        // Inject body onload code at the very end so all inline functions (e.g. init()) are defined first
+        if (bodyOnloadCode) {
+          inlineCodes.push(bodyOnloadCode);
+        }
         
         const loaderScript = tempDoc.createElement("script");
         loaderScript.textContent = `
