@@ -147,9 +147,10 @@ class AgentOrchestrator:
         self.kaggle_hotswap_mode = False
         if torch and torch.cuda.is_available():
             try:
+                num_gpus = torch.cuda.device_count()
                 _free, total_vram = torch.cuda.mem_get_info(0)
-                total_vram_gb = total_vram / (1024 ** 3)
-                self.vram_safety_gb = round(total_vram_gb * 0.40, 1)  # 40% reserve
+                single_gpu_vram_gb = total_vram / (1024 ** 3)
+                self.vram_safety_gb = round(single_gpu_vram_gb * 0.40, 1)  # 40% reserve
                 
                 # ── EVM (Enterprise VRAM Multiplexing) Hot-Swap Mode ──
                 # On GPUs with ≤24GB VRAM (P100, T4, L4), all 3 text models (~14GB total)
@@ -158,19 +159,23 @@ class AgentOrchestrator:
                 # least-recently-used model BEFORE loading a new one, ensuring there is always
                 # enough VRAM headroom. On larger GPUs (A100/H100), all models fit comfortably
                 # so we rely on the standard LRU pressure manager instead.
-                if total_vram_gb <= 24:
+                if single_gpu_vram_gb <= 24:
                     self.kaggle_hotswap_mode = True
                     # EVM guarantees proactive model flushing before every load,
                     # so we can safely use 95% of VRAM and RAM (only 5% reserve).
-                    self.vram_safety_gb = round(total_vram_gb * 0.05, 1)
+                    self.vram_safety_gb = round(single_gpu_vram_gb * 0.05, 1)
                     self.ram_safety_gb = round(self.total_ram_gb * 0.05, 1)
                     print(f"⚡ EVM: Enterprise VRAM Multiplexing ACTIVE (≤24GB GPU detected)")
-                    print(f"⚡ EVM: 95% utilization enabled — VRAM reserve={self.vram_safety_gb:.1f} GB, RAM reserve={self.ram_safety_gb:.1f} GB")
+                    print(f"⚡ EVM: 95% utilization enabled — VRAM reserve={self.vram_safety_gb:.1f} GB per GPU, RAM reserve={self.ram_safety_gb:.1f} GB")
                 else:
                     self.kaggle_hotswap_mode = False
-                        
-                print(f"🎮 DMA: NVIDIA GPU detected — {total_vram_gb:.0f} GB VRAM, "
-                      f"evict threshold = {self.vram_safety_gb:.1f} GB free")
+                
+                if num_gpus >= 2:
+                    print(f"🎮 DMA: NVIDIA GPU detected — {num_gpus}x {single_gpu_vram_gb:.0f} GB VRAM ({single_gpu_vram_gb * num_gpus:.0f} GB combined), "
+                          f"evict threshold = {self.vram_safety_gb:.1f} GB free per GPU")
+                else:
+                    print(f"🎮 DMA: NVIDIA GPU detected — {single_gpu_vram_gb:.0f} GB VRAM, "
+                          f"evict threshold = {self.vram_safety_gb:.1f} GB free")
             except Exception:
                 pass
         # Auto-context ceiling based on available VRAM
@@ -178,17 +183,25 @@ class AgentOrchestrator:
         self.max_auto_ctx = 8192
         if torch and torch.cuda.is_available():
             try:
+                num_gpus = torch.cuda.device_count()
                 _free, total_vram = torch.cuda.mem_get_info(0)
-                total_vram_gb = total_vram / (1024 ** 3)
-                if total_vram_gb <= 16:
+                single_gpu_vram_gb = total_vram / (1024 ** 3)
+                combined_vram_gb = single_gpu_vram_gb * num_gpus
+                
+                # Context capacity scales with combined memory capacity of the GPUs
+                if combined_vram_gb <= 16:
                     self.max_auto_ctx = 16384  # Increased from 8192 to 16k for 16GB VRAM (like P100)
-                elif total_vram_gb <= 24:
+                elif combined_vram_gb <= 24:
                     self.max_auto_ctx = 16384  # Increased from 8192 to 16k for 24GB VRAM
-                elif total_vram_gb <= 48:
-                    self.max_auto_ctx = 32768  # A6000 (48GB) / A100 (40GB) -> 32k context
+                elif combined_vram_gb <= 48:
+                    self.max_auto_ctx = 32768  # A6000 (48GB) / A100 (40GB) / Dual T4 (30GB) -> 32k context
                 else:
                     self.max_auto_ctx = 65536  # H100 (80GB) -> 64k context
-                print(f"📐 DMA: Auto-context ceiling = {self.max_auto_ctx} tokens (based on {total_vram_gb:.0f} GB VRAM)")
+                
+                if num_gpus >= 2:
+                    print(f"📐 DMA: Auto-context ceiling = {self.max_auto_ctx} tokens (based on {combined_vram_gb:.0f} GB combined VRAM)")
+                else:
+                    print(f"📐 DMA: Auto-context ceiling = {self.max_auto_ctx} tokens (based on {single_gpu_vram_gb:.0f} GB VRAM)")
             except Exception:
                 pass
         self.context_length = self.max_auto_ctx
