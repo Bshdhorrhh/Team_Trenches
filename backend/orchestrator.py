@@ -255,8 +255,8 @@ class AgentOrchestrator:
         vram_allowed_ceiling = ram_allowed_ceiling
         if not (torch and torch.cuda.is_available()):
             # Without CUDA, llama.cpp runs on Vulkan, OpenCL, or CPU where Flash Attention is disabled.
-            # We must strictly cap context to 8192 to prevent quadratic memory growth segfaults.
-            vram_allowed_ceiling = min(8192, vram_allowed_ceiling)
+            # We must strictly cap context to 4096 to prevent quadratic memory growth segfaults/OOMs.
+            vram_allowed_ceiling = min(4096, vram_allowed_ceiling)
         else:
             try:
                 free_vram, total_vram = torch.cuda.mem_get_info(0)
@@ -292,13 +292,12 @@ class AgentOrchestrator:
                     major, minor = torch.cuda.get_device_capability(0)
                     if major < 8:  # SM 6.0 (P100), SM 7.5 (T4)
                         # Without Flash Attention, attention memory scales quadratically.
-                        # Cap at 8192 on older GPUs to prevent quadratic VRAM OOM crashes, while
-                        # allowing enough tokens for DeepSeek-R1 to finish long mathematical derivations.
-                        vram_allowed_ceiling = min(8192, vram_allowed_ceiling)
+                        # Cap at 2048 on older GPUs to prevent quadratic VRAM OOM crashes.
+                        vram_allowed_ceiling = min(2048, vram_allowed_ceiling)
                 except Exception:
                     # If we cannot determine SM architecture (e.g. Intel IPEX or AMD ROCm),
-                    # assume no Flash Attention and strictly cap to 8192 to prevent OOM.
-                    vram_allowed_ceiling = min(8192, vram_allowed_ceiling)
+                    # assume no Flash Attention and strictly cap to 2048 to prevent OOM.
+                    vram_allowed_ceiling = min(2048, vram_allowed_ceiling)
             except Exception:
                 pass
 
