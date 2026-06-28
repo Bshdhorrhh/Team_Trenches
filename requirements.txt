@@ -9,6 +9,7 @@ transformers==4.38.2
 accelerate==0.27.2
 chromadb==0.4.24
 numpy==1.26.4
+pandas>=2.0.0
 beautifulsoup4==4.12.3
 ddgs>=6.0.0
 sympy>=1.12
