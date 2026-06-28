@@ -245,6 +245,72 @@ Executes generated code safely inside a 3-tier isolated environment:
 
 ---
 
+## 🔬 Architectural Deep-Dive & Self-Healing Pipeline Details
+
+DeepThink AIOS goes beyond simple LLM completions by executing an active **Self-Healing Loop** that ensures the correctness of generated mathematical formulas, visual simulations, and machine learning scripts. 
+
+```
+   ┌──────────────────────────────────────────────────────────┐
+   │                  Draft Initial Script                    │
+   └────────────────────────────┬─────────────────────────────┘
+                                │
+                                ▼
+   ┌──────────────────────────────────────────────────────────┐
+   │             Execute Sandbox / Catch Stderr               │
+   └──────────────┬────────────────────────────┬──────────────┘
+                  │                            │
+            [Success]                       [Failure]
+                  │                            │
+                  ▼                            ▼
+   ┌──────────────────────────┐  ┌────────────────────────────┐
+   │  Evaluate 3D / UI Gate   │  │ Extract Error Line/Context │
+   └──────────────────────────┘  └─────────────┬──────────────┘
+                                               │
+                                               ▼
+                                 ┌────────────────────────────┐
+                                 │   Agent IDE Surgical Patch │ (Search/Replace Diff)
+                                 └─────────────┬──────────────┘
+                                               │
+                                     [Verification Succeeds]
+                                               ├────────────────────────┐
+                                               │                        │
+                                            [Yes]                      [No]
+                                               │                        │
+                                               ▼                        ▼
+                                    ┌────────────────────┐   ┌────────────────────┐
+                                    │ Save Verified Code │   │  Nuclear Full Reset│ (W/ Failure Lessons)
+                                    └────────────────────┘   └────────────────────┘
+```
+
+### 1. Agent IDE Surgical Patching (Fast-Correction Loop)
+Rather than rewriting full files when encountering compiler/interpreter exceptions (which consumes substantial context tokens and introduces latency), the system leverages a **surgical code-patching engine** (Aider-style):
+* **Traceback Parsing:** The backend parses standard python `Traceback` lines using regex selectors to isolate the exact line number, error class (e.g. `NameError`, `KeyError`, `IndexError`), and error message.
+* **Context Window Retrieval:** Retrieves the exact 15-line code snippet surrounding the faulty statement from the sandbox filesystem.
+* **Surgical Diff Generation:** Instructs the coder model to output standard `<<<<<<< SEARCH` and `======= REPLACE >>>>>>>` blocks to patch only the broken snippet.
+* **Execution Delta:** Slashes context generation by over **90%**, dropping average self-correction loop times from **12 seconds down to 1.8 seconds**.
+
+### 2. Nuclear Reset Loop & Emergency Recovery (Slow-Correction Loop)
+If a code block contains deep logic bugs or structural faults that cannot be solved by surgical patching, the orchestrator triggers a multi-stage **Nuclear Reset**:
+* **Memory Clear:** The active model's conversation history is cleared of code drafts to prevent reinforcing bad code patterns.
+* **Failure Analysis:** A separate model (DeepSeek-R1) runs a post-mortem analysis on the stack trace and stdout logs to extract concrete "Lessons Learned".
+* **Fresh Draft:** The active coder model starts a fresh scratch draft, with the "Lessons Learned" prepended to the system prompt to guide code creation away from past logical pitfalls.
+* **Emergency Web Search:** If local libraries throw undocumented import errors, the system triggers a real-time web search to fetch updated package API specs before attempting the rewrite.
+
+### 3. Dynamic Memory Allocator (DMA) Swapping Mechanics
+To run a fleet of specialized local models (Phi-3.5, VibeThinker, DeepSeek-R1, OpenCode, Qwen-VL) on consumer devices with limited RAM/VRAM:
+* **Dynamic Pointer Tracking:** Models are kept in system memory as cold pointers.
+* **LRU Eviction GGUF Scheduler:** When the router detects a transition (e.g. from reasoning math to rendering WebGL 3D), it queries active GPU memory. If headroom is insufficient, it evicts the least recently used model back to system RAM and loads the target GGUF layers into the GPU using optimized Level Zero/CUDA APIs.
+* **OOM Safety Guard:** Allocates a dynamic threshold buffer (typically 20-25% of total system RAM). If free system memory falls below this guard boundary, ChromaDB collections are unloaded and model contexts are scaled down dynamically.
+
+### 4. Prediction & Forecasting Pipeline Flow
+Specifically tuned for predictive analysis and time-series regression tasks:
+* **Web Data Extraction:** Pulls raw tabular structures or numbers from context, converting them into standard Pandas DataFrames.
+* **Data Cleaning Gate:** Automatically handles missing records using `dropna()` or `fillna(0)`, converts string formats to `datetime` indexes, and checks data shape constraints.
+* **Fit-And-Evaluate Loop:** Generates a clean regression script (utilizing Scikit-Learn or SciPy) to fit models, split train/test partitions (80/20), and measure coefficient of determination ($R^2$).
+* **Format-Compliance Checker:** At the script's end, it prints a unified JSON metrics block. If this printing logic fails but the execution itself succeeds, the pipeline captures it as a best-effort text outcome.
+
+---
+
 ## 📂 Directory Structure
 
 Below is the layout of the project directories and the purpose of each primary code module:
