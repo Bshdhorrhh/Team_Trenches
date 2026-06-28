@@ -1586,14 +1586,21 @@ class AgentOrchestrator:
             f"{prompt_context}"
             f"To verify:\n{hypothesis[:2000]}"
         )
+        if status_callback:
+            status_callback("OpenCode writing Python Verification Script...", "info", "opencode", 42)
         test_response = self._call_model(coder_model, playground_prompt, max_tokens=4096, temperature=0.1)
         test_code = Sandbox.extract_code(test_response)
+        
+        if status_callback:
+            status_callback("Executing verification in Sandbox...", "info", "opencode", 45)
         success, output = self.sandbox.execute(test_code, language='python')
         
         # ── Router Linter Intercept for Verification/Playground Scripts ──
         if not success and test_code:
             is_syntax_error = any(e in output for e in ["SyntaxError", "ModuleNotFoundError", "NameError", "IndentationError", "TypeError", "AttributeError", "ValueError"])
             if is_syntax_error:
+                if status_callback:
+                    status_callback("⚠️🔧 Agent IDE: Surgical patching Sandbox syntax error...", "warning", "opencode", 48)
                 router_linter = self._get_model("opencode", required_ctx=8192)
 
                 # Step A: Try Agent IDE surgical patch first
@@ -3195,7 +3202,7 @@ class AgentOrchestrator:
                 if use_logic_playground:
                     if status_callback:
                         status_callback(f"Reasoning Sandbox: Verifying logic (Attempt {rnd+1}/{max_rounds})...", "info", model_key, 30 + rnd*10)
-                    verified, pg_out, _ = self._run_playground(ds_llm, ds_draft, "logic", model_key=model_key, original_prompt=prompt)
+                    verified, pg_out, _ = self._run_playground(ds_llm, ds_draft, "logic", status_callback=status_callback, model_key=model_key, original_prompt=prompt)
 
                 if not verified:
                     if status_callback:
@@ -3624,7 +3631,7 @@ class AgentOrchestrator:
 
                     if status_callback:
                         status_callback(f"Verifying in Reasoning Playground (Attempt {rnd+1}/{max_rounds})...", "info", model_key, 35 + rnd*12)
-                    verified, pg_out, test_code = self._run_playground(ds_llm, ds_answer, "reasoning", model_key=model_key, original_prompt=prompt)
+                    verified, pg_out, test_code = self._run_playground(ds_llm, ds_answer, "reasoning", status_callback=status_callback, model_key=model_key, original_prompt=prompt)
 
                     if verified:
                         if status_callback:
@@ -3672,7 +3679,7 @@ class AgentOrchestrator:
                     )
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     vibe_answer = self._strip_thinking(self._call_model(ds_llm, vibe_p, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", model_key="deepseek_r1", original_prompt=prompt)
+                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
                     if v2:
                         if status_callback:
                             status_callback("DeepSeek-R1's correction VERIFIED!", "success", "deepseek_r1", 80)
@@ -3725,7 +3732,7 @@ class AgentOrchestrator:
                         f"Failed Draft:\n{ds_answer[:1500]}"
                     )
                     vibe_answer = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", model_key="deepseek_r1", original_prompt=prompt)
+                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
                     if not v2:
                         # Attempt exactly 1 round of playground correction for emergency healing
                         if status_callback:
@@ -3739,7 +3746,7 @@ class AgentOrchestrator:
                         )
                         ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                         vibe_answer = self._strip_thinking(self._call_model(ds_llm, corr_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                        v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", model_key="deepseek_r1", original_prompt=prompt)
+                        v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
                     if v2:
                         if status_callback:
                             status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
