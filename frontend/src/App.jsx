@@ -1436,34 +1436,28 @@ export default function App() {
                 <div className="popup-item" style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: "6px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                     <span><span className="popup-icon">🌐</span> Web Search</span>
-                    <span style={{
-                      fontSize: "0.7rem",
-                      padding: "2px 8px",
-                      borderRadius: "10px",
-                      background: searchMode !== "off" ? `${searchModeColors[searchMode]}22` : "rgba(255,255,255,0.05)",
-                      color: searchMode !== "off" ? searchModeColors[searchMode] : "#888",
-                      border: `1px solid ${searchMode !== "off" ? searchModeColors[searchMode] + '44' : 'rgba(255,255,255,0.1)'}`,
-                      fontWeight: 600
-                    }}>{searchModeLabels[searchMode]}</span>
                   </div>
-                  <div style={{ display: "flex", gap: "4px", width: "100%" }}>
+                  <div className="segmented-control-container">
+                    <div 
+                      className="segmented-slider-backdrop"
+                      style={{
+                        width: "calc(25% - 2px)",
+                        transform: `translateX(${searchModes.indexOf(searchMode) * 100}%)`,
+                        background: searchMode !== "off" ? (searchModeColors[searchMode] || "rgba(255,255,255,0.15)") : "rgba(255,255,255,0.08)",
+                        boxShadow: searchMode !== "off" ? `0 0 10px ${searchModeColors[searchMode]}55` : "none"
+                      }}
+                    />
                     {searchModes.map(m => (
                       <button
                         key={m}
+                        className={`segmented-button ${searchMode === m ? "active" : ""}`}
                         onClick={(e) => { e.stopPropagation(); setSearchMode(m); }}
                         style={{
-                          flex: 1,
-                          padding: "4px 0",
-                          fontSize: "0.65rem",
-                          border: `1px solid ${searchMode === m ? (searchModeColors[m] || '#555') + 'aa' : 'rgba(255,255,255,0.08)'}`,
-                          borderRadius: "6px",
-                          background: searchMode === m ? (searchModeColors[m] || '#555') + '22' : 'rgba(255,255,255,0.03)',
-                          color: searchMode === m ? (searchModeColors[m] || '#ccc') : '#888',
-                          cursor: "pointer",
-                          fontWeight: searchMode === m ? 700 : 400,
-                          transition: "all 0.2s ease"
+                          color: searchMode === m ? "#ffffff" : "#888"
                         }}
-                      >{searchModeLabels[m]}</button>
+                      >
+                        {searchModeLabels[m].replace(/🌐 |🔮 |🔬 /, "")}
+                      </button>
                     ))}
                   </div>
                 </div>
