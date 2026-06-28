@@ -779,27 +779,34 @@ body {
   transform: translateX(16px);
 }
 
-/* Segmented Control / Sliding Switch */
+/* ═══════════════════════════════════════════════════
+   Segmented Control / Premium Sliding Switch
+   ═══════════════════════════════════════════════════ */
 .segmented-control-container {
   display: flex;
   position: relative;
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 2px;
-  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 3px;
+  margin-top: 6px;
   user-select: none;
   box-sizing: border-box;
+  gap: 1px;
 }
 
 .segmented-slider-backdrop {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  border-radius: 18px;
-  transition: transform 0.28s cubic-bezier(0.25, 0.8, 0.25, 1.15), background-color 0.28s, box-shadow 0.28s;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  border-radius: 11px;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.3s ease,
+              box-shadow 0.3s ease;
   z-index: 1;
   pointer-events: none;
 }
@@ -808,21 +815,39 @@ body {
   flex: 1;
   border: none;
   background: transparent;
-  padding: 6px 0;
-  font-size: 0.72rem;
+  padding: 7px 2px;
+  font-size: 0.7rem;
   font-family: inherit;
   font-weight: 500;
+  letter-spacing: 0.01em;
   cursor: pointer;
   z-index: 2;
   position: relative;
   text-align: center;
-  transition: color 0.2s ease, font-weight 0.2s ease;
+  border-radius: 9px;
+  transition: color 0.22s ease,
+              font-weight 0.2s ease,
+              background 0.18s ease,
+              transform 0.1s ease;
   outline: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.segmented-button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #bbb !important;
+}
+
+.segmented-button:active {
+  transform: scale(0.95);
 }
 
 .segmented-button.active {
   font-weight: 700;
   color: #ffffff !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
 /* Image preview badge */

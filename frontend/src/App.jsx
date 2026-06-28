@@ -1433,18 +1433,36 @@ export default function App() {
                   <span className="popup-icon">📷</span> Upload photo or file
                 </button>
                 <div className="popup-divider" />
-                <div className="popup-item" style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: "6px" }}>
+                <div className="popup-item" style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: "8px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                     <span><span className="popup-icon">🌐</span> Web Search</span>
+                    {searchMode !== "off" && (
+                      <span style={{
+                        fontSize: "0.65rem",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: `${searchModeColors[searchMode]}22`,
+                        color: searchModeColors[searchMode],
+                        fontWeight: 600,
+                        letterSpacing: "0.03em",
+                        textTransform: "uppercase"
+                      }}>
+                        {searchMode}
+                      </span>
+                    )}
                   </div>
                   <div className="segmented-control-container">
                     <div 
                       className="segmented-slider-backdrop"
                       style={{
-                        width: "calc(25% - 2px)",
-                        transform: `translateX(${searchModes.indexOf(searchMode) * 100}%)`,
-                        background: searchMode !== "off" ? (searchModeColors[searchMode] || "rgba(255,255,255,0.15)") : "rgba(255,255,255,0.08)",
-                        boxShadow: searchMode !== "off" ? `0 0 10px ${searchModeColors[searchMode]}55` : "none"
+                        width: "calc(25% - 3px)",
+                        transform: `translateX(calc(${searchModes.indexOf(searchMode)} * (100% + 3px)))`,
+                        background: searchMode !== "off"
+                          ? `linear-gradient(135deg, ${searchModeColors[searchMode]}cc, ${searchModeColors[searchMode]}88)`
+                          : "rgba(255,255,255,0.06)",
+                        boxShadow: searchMode !== "off"
+                          ? `0 0 12px ${searchModeColors[searchMode]}44, inset 0 1px 0 rgba(255,255,255,0.1)`
+                          : "inset 0 1px 0 rgba(255,255,255,0.05)"
                       }}
                     />
                     {searchModes.map(m => (
@@ -1453,10 +1471,11 @@ export default function App() {
                         className={`segmented-button ${searchMode === m ? "active" : ""}`}
                         onClick={(e) => { e.stopPropagation(); setSearchMode(m); }}
                         style={{
-                          color: searchMode === m ? "#ffffff" : "#888"
+                          color: searchMode === m ? "#ffffff" : "#777",
+                          fontSize: m === "off" ? "0.7rem" : "0.68rem"
                         }}
                       >
-                        {searchModeLabels[m].replace(/🌐 |🔮 |🔬 /, "")}
+                        {searchModeLabels[m]}
                       </button>
                     ))}
                   </div>
