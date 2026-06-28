@@ -1342,6 +1342,10 @@ class AgentOrchestrator:
         # ── 1. Fast-track Code Block / Traceback presence (Direct CODING) ──────
         if "```" in prompt or "traceback (most recent call)" in prompt_lower or "line " in prompt_lower and "in <module>" in prompt_lower:
             return "CODING"
+            
+        explicit_coding = ["write a python", "write python", "python script", "implement in python", "write a code", "write code", "c++ code", "javascript code", "bash script", "write a script", "write script", "implement script"]
+        if any(trigger in prompt_lower for trigger in explicit_coding):
+            return "CODING"
         
         # ── 2. Fast-track greetings & simple metadata queries (Direct SIMPLE) ──
         greetings = {"hi", "hello", "hey", "hola", "howdy", "greetings", "good morning", "good afternoon", "good evening", "how are you", "who are you", "what is your name"}
@@ -1464,6 +1468,8 @@ class AgentOrchestrator:
             "codon", "transcription", "translation", "protein", "dna", "rna",
             # Cybersecurity
             "encrypt", "decrypt", "cipher", "hash", "aes", "rsa", "jwt",
+            # Algorithmic/Validation
+            "algorithm", "validate", "python", "script", "code", "implement", "k-means", "clustering"
         ]
         prompt_lower = prompt.lower()
         if any(kw in prompt_lower for kw in auto_keywords):
@@ -3535,7 +3541,7 @@ class AgentOrchestrator:
         ds_safe = self._crunch_prompt(enriched_prompt, "deepseek_r1", crunch_budget, status_callback, router_llm=router_llm)
 
         if status_callback:
-            mode = "Playground-Verified" if use_playground else "LLM Debate"
+            mode = "Playground-Verified" if use_playground else "Theoretical Analysis"
             status_callback(f"Reasoning mode: {mode}", "info", "router", 15)
 
         ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
