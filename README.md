@@ -162,6 +162,10 @@ flowchart TD
     P_IDE_PATCH -->|Patch Success| P_PASS
     P_IDE_PATCH -->|Patch Failed| P_CLEAN["Data Cleaning Loop: OpenCode full rewrite"]
     P_CLEAN --> P_SB
+    
+    P_PASS & P_BEST_EFFORT --> P_3D_GATE{"Triggers 3D Visuals?"}
+    P_3D_GATE -->|Yes| VIZ_DRAFT
+    P_3D_GATE -->|No| RENDER_UI
 
     %% ── 5. 3D VIZ PATHWAY ──
     PATH_3D --> VIZ_DRAFT["OpenCodeInterpreter 7B: Generate HTML (JS WebGL)"]
@@ -181,7 +185,7 @@ flowchart TD
     EXT_SB -->|Success| EXT_PASS["Output Deep Analysis Report + Interactive Charts"]
 
     %% ── FINAL RENDERING TERMINUS ──
-    SIMPLE_ANS & REASON_PASS & CODE_PASS & P_PASS & P_BEST_EFFORT & VIZ_PASS & EXT_PASS --> RENDER_UI["💻 React Frontend UI / Chat Output"]
+    SIMPLE_ANS & REASON_PASS & CODE_PASS & VIZ_PASS & EXT_PASS --> RENDER_UI["💻 React Frontend UI / Chat Output"]
 
     %% ── STYLING ──
     classDef default fill:#1E1E1E,stroke:#4A4A4A,stroke-width:2px,color:#FFF;
@@ -191,7 +195,7 @@ flowchart TD
     classDef terminal fill:#1B5E20,stroke:#4CAF50,stroke-width:2px,color:#FFF;
     
     class USER,ROUTER,OPT_QUERY,SCRAPE,CLASSIFY gateway;
-    class PATH_SIMPLE,PATH_REASONING,PATH_CODING,PATH_PREDICT,PATH_3D,PATH_EXTREME routing;
+    class PATH_SIMPLE,PATH_REASONING,PATH_CODING,PATH_PREDICT,PATH_3D,PATH_EXTREME,P_3D_GATE routing;
     class REASON_SB,CODING_SB,P_SB,VIZ_SB,EXT_SB sandbox;
     class RENDER_UI terminal;
 ```
