@@ -299,18 +299,18 @@ class AgentOrchestrator:
                     else:
                         vram_allowed_ceiling = 2048
                 
-                # GPU Architecture check: older GPUs (P100) lack hardware Flash Attention.
+                # GPU Architecture check: older GPUs (P100, T4, V100) lack reliable hardware Flash Attention.
                 # Standard attention memory scales quadratically. Cap context to prevent OOM.
                 try:
                     major, minor = torch.cuda.get_device_capability(0)
-                    if major < 7:  # SM 6.0 (P100) or older
+                    if major < 8:  # SM 7.5 (T4) or older
                         # Without Flash Attention, attention memory scales quadratically.
-                        # Cap at 2048 on older GPUs to prevent quadratic VRAM OOM crashes.
-                        vram_allowed_ceiling = min(2048, vram_allowed_ceiling)
+                        # Cap at 8192 on older GPUs to prevent quadratic VRAM OOM crashes.
+                        vram_allowed_ceiling = min(8192, vram_allowed_ceiling)
                 except Exception:
                     # If we cannot determine SM architecture (e.g. Intel IPEX or AMD ROCm),
-                    # assume no Flash Attention and strictly cap to 2048 to prevent OOM.
-                    vram_allowed_ceiling = min(2048, vram_allowed_ceiling)
+                    # assume no Flash Attention and strictly cap to 8192 to prevent OOM.
+                    vram_allowed_ceiling = min(8192, vram_allowed_ceiling)
             except Exception:
                 pass
 
@@ -733,7 +733,7 @@ class AgentOrchestrator:
             if torch and torch.cuda.is_available() and not loading_on_cpu:
                 try:
                     major, _ = torch.cuda.get_device_capability(0)
-                    if major < 7:
+                    if major < 8:
                         is_older_gpu = True
                 except Exception:
                     pass
