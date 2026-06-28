@@ -1,6 +1,6 @@
-# DeepThinker Setup & Hardware Acceleration Guide
+# DeepThink AIOS Setup & Hardware Acceleration Guide
 
-Because DeepThinker runs fully local 7B reasoning agents, it requires **hardware acceleration (GPU)**. 
+Because DeepThink AIOS runs fully local 7B reasoning agents, it requires **hardware acceleration (GPU)**. 
 
 The Python code is OS-agnostic, but PyTorch and `llama.cpp` require different installation commands depending on if you are using an Apple MacBook, a Windows NVIDIA PC, or a Linux Intel machine.
 
@@ -9,7 +9,7 @@ Please follow the instructions for your specific operating system to ensure the 
 ---
 
 ## Step 1: System Prerequisites (For Polyglot Sandbox)
-DeepThinker can execute code in multiple languages. For this to work, ensure your system has the necessary native compilers installed.
+DeepThink AIOS can execute code in multiple languages. For this to work, ensure your system has the necessary native compilers installed.
 
 *   **Mac:** Run `xcode-select --install` in terminal (installs `gcc`/`g++`).
 *   **Linux:** Run `sudo apt install build-essential openjdk-17-jdk nodejs` (installs C/C++, Java, and Node.js).
@@ -24,15 +24,15 @@ First, install the core dependencies that work on all operating systems:
 
 ```bash
 # Clone the repository and enter it
-git clone https://github.com/yourusername/deepthinker.git
-cd deepthinker
+git clone https://github.com/Bshdhorrhh/Team_Trenches.git
+cd Team_Trenches
 
 # Create a virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 
-# Install the base OS-agnostic packages
-pip install fastapi uvicorn pydantic python-multipart requests psutil huggingface-hub transformers accelerate chromadb numpy beautifulsoup4 duckduckgo-search
+# Install all package requirements
+pip install -r requirements.txt
 ```
 
 ---

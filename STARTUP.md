@@ -1,4 +1,4 @@
-# 🚀 DeepThinker — Startup Guide
+# 🚀 DeepThink AIOS — Startup Guide
 
 > **Prerequisites:** Complete the one-time installation in [README_SETUP.md](./README_SETUP.md) first.
 
@@ -6,7 +6,7 @@
 
 ## ✅ Recommended: Manual Two-Terminal Method
 
-This is the most reliable way to run DeepThinker on any operating system. Open **two separate terminal windows** in the project root folder.
+This is the most reliable way to run DeepThink AIOS on any operating system. Open **two separate terminal windows** in the project root folder.
 
 ---
 
@@ -99,11 +99,13 @@ cd C:\path\to\Team_Trenches\frontend
 npm run dev
 ```
 
+Open **`http://localhost:5173`** in your browser. ✅
+
 ---
 
 ## 📥 Downloading Models (First Time Only)
 
-Before running for the first time, download the AI model weights (~18 GB total):
+Before running for the first time, download the AI model weights (~24 GB total):
 
 ```bash
 source venv/bin/activate       # Linux / Mac
@@ -118,7 +120,7 @@ python backend/downloader.py router deepseek_r1 vibethinker opencode qwen_vl
 # Or download individually
 python backend/downloader.py router          # Phi-3.5 Mini Router     (~3 GB)
 python backend/downloader.py deepseek_r1    # DeepSeek-R1 7B           (~6 GB)
-python backend/downloader.py vibethinker    # VibeThinker 1.5B         (~1.4 GB)
+python backend/downloader.py vibethinker    # VibeThinker 3B           (~2.5 GB)
 python backend/downloader.py opencode       # OpenCodeInterpreter 6.7B (~5 GB)
 python backend/downloader.py qwen_vl        # Qwen2.5-VL 7B Vision     (~7 GB)
 ```
@@ -213,13 +215,13 @@ Then re-run `npm run dev`. Or just use `http://localhost:5174` — works the sam
 
 Once both servers are up and you submit a prompt, the pipeline streams live in the UI:
 
-1. **Phi-3.5 Router** classifies: `CODING` / `REASONING` / `SIMPLE`
-2. **DeepSeek-R1** drafts a logic plan or detailed answer
-3. **Reasoning Sandbox** verifies with Python assertions
-4. **VibeThinker** writes and self-corrects the code
-5. **Execution Sandbox** runs code in an isolated environment
-6. **OpenCodeInterpreter** generates an interactive 3D Plotly chart (if applicable)
-7. Final answer streams to the UI with code, output, and visualization
+1. **Phi-3.5 Router** classifies the query into one of the 6 paths: `SIMPLE`, `CODING`, `REASONING`, `PREDICTION`, `3D_VIZ`, or `EXTREME_WEBSEARCH`.
+2. **DeepSeek-R1** or **VibeThinker** drafts the step-by-step logic, math derivation, or analytical comparison.
+3. **Execution/Node.js Sandbox** performs logic, coordinate, or API checks on the draft.
+4. **OpenCodeInterpreter** generates target code, data frames, or HTML visualization elements.
+5. **Polyglot Sandbox** compiles and executes scripts in isolated environments.
+6. **Self-Correction/Linter loops** fix runtime syntax errors on the fly.
+7. Final answer streams to the UI with code, output, and visual elements.
 
 ---
 
