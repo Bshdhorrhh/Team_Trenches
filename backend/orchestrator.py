@@ -2468,7 +2468,7 @@ class AgentOrchestrator:
             f"RULES:\n"
             f"1. Import plotly.graph_objects as go, numpy as np, json\n"
             f"2. Create pie charts, bar charts, or line charts based on the data in the report.\n"
-            f"3. Use template='plotly_dark' and glassmorphic styling.\n"
+            f"3. Use template='plotly_dark' and glassmorphic styling. Ensure margins are sufficient (especially the left margin `l=120` or `l=150` for horizontal bar charts or long category names) so that labels are never cut off.\n"
             f"4. If the report contains a JSON chart data block, parse and use it directly.\n"
             f"5. If no JSON block exists, extract numbers from the text and create appropriate charts.\n"
             f"6. Last line MUST be: print(fig.to_json())\n"
@@ -2579,7 +2579,7 @@ class AgentOrchestrator:
                 router_llm = self._get_model("router", required_ctx=1024)
                 opt_prompt = (
                     "Transform the user request into a concise Google search query. "
-                    "Keep names, locations, cities, and timeframes. Do NOT remove specific locations (like 'Jharsuguda'). "
+                    "Keep names, locations, cities, and timeframes if present in the user request. "
                     "Output ONLY the plain search query without quotes, bullet points, numbering, or intro text.\n\n"
                     f"User Request: {prompt}"
                 )
