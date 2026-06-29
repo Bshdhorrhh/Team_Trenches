@@ -53,16 +53,36 @@ CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python --upgrade --force-rein
 ```
 
 ### 🪟 Windows / Linux (NVIDIA GPUs)
-NVIDIA uses "CUDA" for GPU acceleration. Ensure you have the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) installed.
+NVIDIA uses "CUDA" for GPU acceleration. Ensure you have the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) installed (v12.1+ recommended).
 
+#### 1. Setup CUDA Environment Variables (Linux only - e.g. Kaggle/L4/L40S)
+If the installer cannot find your CUDA compiler (`nvcc`), make sure it is in your path:
 ```bash
-# 1. Install NVIDIA-optimized PyTorch
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+```
 
-# 2. Install NVIDIA-optimized Llama.cpp (cuBLAS)
-set CMAKE_ARGS="-DGGML_CUDA=on"  # On Linux use: export CMAKE_ARGS="-DGGML_CUDA=on"
+#### 2. Install NVIDIA-optimized PyTorch
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### 3. Compile and Install Llama.cpp with CUDA & Flash Attention Support
+To enable GPU acceleration and full support for hardware-accelerated Flash Attention:
+```bash
+# On Linux:
+export CMAKE_ARGS="-DGGML_CUDA=on"
+# On Windows (cmd):
+set CMAKE_ARGS="-DGGML_CUDA=on"
+# On Windows (PowerShell):
+$env:CMAKE_ARGS="-DGGML_CUDA=on"
+
+# Force compile and install from source
 pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
 ```
+
+> [!NOTE]
+> **Flash Attention Automatic Activation:** The orchestrator dynamically queries your GPU computing capabilities. If running on modern NVIDIA architectures (Ampere or newer, such as L4, L40S, A100, RTX 3000/4000+), the system automatically initializes models with `flash_attn=True` and optimized batch size thresholds.
 
 ### 🐧 Linux (Intel Iris Xe / Arc GPUs)
 *This is the default configuration used during the Hackathon development phase.*
