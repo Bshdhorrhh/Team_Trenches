@@ -121,8 +121,8 @@ class AgentOrchestrator:
         self.memory = Memory()
         self.web_search = WebSearch()
         self.loaded_models = {}
-        self.model_lock = threading.Lock()  # Synchronizes model loads across threads
-        self.inference_lock = threading.Lock()  # Synchronizes generation to prevent llama.cpp C++ deadlocks
+        self.model_lock = threading.RLock()  # Synchronizes model loads across threads (reentrant to prevent offload deadlocks)
+        self.inference_lock = threading.RLock()  # Synchronizes generation to prevent llama.cpp C++ deadlocks
         self.model_access_order = []  # LRU tracker: oldest first
         
         # Dual-GPU Setup Detection
@@ -427,32 +427,68 @@ class AgentOrchestrator:
             self.model_access_order.remove(model_key)
         self.model_access_order.append(model_key)
 
-    def _evict_lru_model(self):
-        """Evict the single least-recently-used model. Returns True if one was evicted."""
+    def _evict_lru_model(self, offload_to_cpu=False):
+        """Evict the single least-recently-used model.
+        In non-EVM mode, if offload_to_cpu is True and system RAM is sufficient,
+        we offload the model to CPU (System RAM) instead of fully closing it.
+        Returns True if a model was evicted or offloaded.
+        """
         if not self.model_access_order:
             return False
         lru_key = self.model_access_order.pop(0)
         model_obj = self.loaded_models.pop(lru_key, None)
         if model_obj is None:
             return False
-        print(f"🧹 DMA-LRU: Evicting '{lru_key}' (least recently used)...")
-        with self.inference_lock:
-            self._close_model(model_obj, lru_key)
-            del model_obj
-        gc.collect()
-        if torch:
+
+        current_gpu_layers = getattr(model_obj, "_n_gpu_layers", 0)
+        
+        # Check if we should offload to CPU instead of fully closing
+        est_size = self._estimate_model_size_gb(lru_key)
+        free_ram = self._get_ram_free_gb()
+        
+        should_offload = (
+            offload_to_cpu and
+            not getattr(self, 'kaggle_hotswap_mode', False) and
+            current_gpu_layers > 0 and
+            (free_ram - est_size) > self.ram_safety_gb
+        )
+        
+        if should_offload:
+            print(f"🧹 DMA-LRU: Offloading '{lru_key}' from VRAM to System RAM (CPU)...")
+            ctx_size = getattr(model_obj, "n_ctx", lambda: 2048)()
+            with self.inference_lock:
+                self._close_model(model_obj, lru_key)
+                del model_obj
+            gc.collect()
+            
+            # Load the model on CPU
             try:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except Exception:
-                pass
-            try:
-                if hasattr(torch, "xpu") and torch.xpu.is_available():
-                    torch.xpu.empty_cache()
-            except Exception:
-                pass
-        print(f"  ✅ Evicted '{lru_key}'. RAM now: {self._get_ram_free_gb():.1f} GB free")
-        return True
+                self._load_model_synchronized(lru_key, required_ctx=ctx_size, force_cpu=True)
+                print(f"  ✅ Offloaded '{lru_key}' to CPU. RAM now: {self._get_ram_free_gb():.1f} GB free")
+                return True
+            except Exception as e:
+                print(f"⚠️ Failed to load '{lru_key}' on CPU during offload: {e}")
+                # If CPU fallback fails, it is already closed so we just return True
+                return True
+        else:
+            print(f"🧹 DMA-LRU: Evicting '{lru_key}' (least recently used)...")
+            with self.inference_lock:
+                self._close_model(model_obj, lru_key)
+                del model_obj
+            gc.collect()
+            if torch:
+                try:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                try:
+                    if hasattr(torch, "xpu") and torch.xpu.is_available():
+                        torch.xpu.empty_cache()
+                except Exception:
+                    pass
+            print(f"  ✅ Evicted '{lru_key}'. RAM now: {self._get_ram_free_gb():.1f} GB free")
+            return True
 
     def _estimate_model_size_gb(self, model_key):
         """Estimate model size in GB from the GGUF file on disk."""
@@ -501,7 +537,7 @@ class AgentOrchestrator:
                     if vram_free < effective_threshold:
                         print(f"⚠️ DMA: CUDA GPU:{gpu_idx} VRAM low ({vram_free:.1f} GB free, need {effective_threshold:.1f} GB)")
                         while vram_free < effective_threshold and self.model_access_order:
-                            if not self._evict_lru_model():
+                            if not self._evict_lru_model(offload_to_cpu=True):
                                 break
                             evicted_any = True
                             vram_free = self._get_vram_free_gb(gpu_idx)
@@ -517,7 +553,7 @@ class AgentOrchestrator:
             if free_gb < effective_threshold:
                 print(f"⚠️ DMA: sysfs {card_name} VRAM low ({free_gb:.1f}/{total_gb:.1f} GB free)")
                 while free_gb < effective_threshold and self.model_access_order:
-                    if not self._evict_lru_model():
+                    if not self._evict_lru_model(offload_to_cpu=True):
                         break
                     evicted_any = True
                     # Re-read sysfs after eviction
@@ -643,8 +679,8 @@ class AgentOrchestrator:
                     self._close_model(model_obj, model_key)
                     del model_obj
                     gc.collect()
-            # Case 2: We want it on CPU (force_cpu) but it's currently on GPU (VRAM)
-            elif force_cpu and current_gpu_layers > 0:
+            # Case 2: We want it on CPU (force_cpu or device_mode == cpu) but it's currently on GPU (VRAM)
+            elif (force_cpu or self.device_mode == "cpu") and current_gpu_layers > 0:
                 print(f"🔄 EVM (VRAM -> RAM Swap): Swapping '{model_key}' from VRAM down to System RAM...")
                 with self.model_lock:
                     # Unload GPU version
