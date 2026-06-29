@@ -1461,24 +1461,19 @@ class AgentOrchestrator:
     def _is_playground_applicable(self, router_llm, prompt):
         """Check if reasoning can be verified via Python sandbox."""
         auto_keywords = [
-            "solve", "calculate", "equations of motion", "scipy", "numpy", "solve_ivp", "assert",
-            "integrate", "trajectory", "physics", "math", "verify", "verification script",
-            # Bio/Chem
-            "enzyme", "kinetics", "michaelis", "inhibition", "reaction rate", "molecular weight",
-            "codon", "transcription", "translation", "protein", "dna", "rna",
-            # Cybersecurity
-            "encrypt", "decrypt", "cipher", "hash", "aes", "rsa", "jwt",
-            # Algorithmic/Validation
-            "algorithm", "validate", "python", "script", "code", "implement", "k-means", "clustering"
+            "solve_ivp", "scipy", "sympy", "z3-solver", "networkx", "astropy", "biopython", "rdkit",
+            "verification script", "run playground", "sandbox verification"
         ]
         prompt_lower = prompt.lower()
         if any(kw in prompt_lower for kw in auto_keywords):
             return True
 
         p = (
-            "Can this concept be verified using a Python script? "
-            "Math/physics equations, logic puzzles, statistical claims = YES. "
-            "Philosophy, ethics, creative writing, history, opinions = NO.\n"
+            "Determine if this request can be numerically verified or proven using a short Python validation script.\n"
+            "Return YES if: It involves computing a specific value, simulating a differential equation (like ODEs/trajectory with numbers), "
+            "solving constraints (SAT/Z3), verifying encryption/decryption roundtrips, or testing a specific algorithm's logic.\n"
+            "Return NO if: It is a request for general explanations, derivations (like Euler-Lagrange, mathematical proofs), "
+            "conceptual descriptions, or open-ended theoretical physics/math questions without concrete inputs/assertions.\n\n"
             "Reply ONLY 'YES' or 'NO'.\n\n"
             f"Query: {prompt[:500]}"
         )
@@ -1639,7 +1634,8 @@ class AgentOrchestrator:
         if not verified and not success and test_code:
             is_assertion_failure = "AssertionError" in output or "AssertionError" in output.replace("Assertion", "Assertion")
             is_test_script_crash = any(e in output for e in [
-                "ImportError", "ModuleNotFoundError"
+                "ImportError", "ModuleNotFoundError", "NameError", "TypeError", "AttributeError",
+                "ValueError", "IndexError", "KeyError", "ZeroDivisionError", "OverflowError"
             ])
             if is_test_script_crash and not is_assertion_failure:
                 # The verification script itself crashed — the logic plan was never disproven.
@@ -2307,7 +2303,7 @@ class AgentOrchestrator:
         
         ml_system_prompt = (
             "You are an expert Python data scientist. Write production-grade ML scripts using pandas, "
-            "scikit-learn, numpy, and scipy. Handle missing data (NaN), parse dates, and use robust "
+            "scikit-learn, numpy, and scipy. Handle missing data (NaN), parse dates (only if date/time-series data is present in the task), and use robust "
             "regression methods. Always validate your data before fitting models.\n"
             "CRITICAL: NEVER attempt to load external files like 'data.csv' or 'dataset.csv' unless a specific file path is provided in the prompt. "
             "You MUST generate synthetic data arrays in code (e.g. using np.random.randn, np.linspace, pd.date_range) so the script can run completely standalone without any external files.\n"
@@ -2321,7 +2317,7 @@ class AgentOrchestrator:
             f"Write a complete Python script that performs predictive analysis/forecasting on the following data.\n\n"
             f"RULES:\n"
             f"1. Import pandas, numpy, sklearn, json. Parse any tabular data from the context below.\n"
-            f"2. Handle missing values with dropna() or fillna(). Convert date strings to datetime.\n"
+            f"2. Handle missing values with dropna() or fillna(). Convert date strings to datetime (only if date strings are explicitly present in the data).\n"
             f"3. Use LinearRegression, Ridge, or RandomForestRegressor from sklearn.\n"
             f"4. Split data 80/20 for train/test. Compute R² score.\n"
             f"5. Generate future predictions (5-10 steps ahead).\n"
@@ -2414,7 +2410,7 @@ class AgentOrchestrator:
                 f"Fix the script. Common issues:\n"
                 f"1. NaN values — use dropna() or fillna(0)\n"
                 f"2. Empty DataFrame — create synthetic sample data based on the topic\n"
-                f"3. Date parsing — use pd.to_datetime(errors='coerce')\n"
+                f"3. Date parsing — use pd.to_datetime(errors='coerce') (only if dates are explicitly present in the data)\n"
                 f"4. Shape mismatch — ensure X and y have matching rows\n"
                 f"5. If web-scraped data is unavailable, generate realistic synthetic data\n"
                 f"Output ONLY the corrected script in ```python``` blocks."
@@ -2803,10 +2799,22 @@ class AgentOrchestrator:
 
         # ── Six-Way Classification ────────────────────────────────────────
         router_llm = self._get_model("router", required_ctx=router_ctx)
+        
+        # Define comprehensive predictive indicators
+        is_predictive = any(kw in prompt_lower for kw in [
+            "predict", "forecast", "prediction", "regression", "classifier", "classification",
+            "machine learning", "random forest", "scikit-learn", "linear regression",
+            "logistic regression", "ridge regression", "lasso regression", "neural network",
+            "train test split", "mean squared error", "r-squared", "r2 score"
+        ])
+        
         if isinstance(mode, str) and mode.upper() in ["SIMPLE", "CODING", "REASONING", "PREDICTION", "EXTREME_WEBSEARCH"]:
             task_type = mode.upper()
         else:
-            task_type = self._classify_task(router_llm, prompt)
+            if is_predictive:
+                task_type = "PREDICTION"
+            else:
+                task_type = self._classify_task(router_llm, prompt)
             
         # ── Search Mode Overrides ─────────────────────────────────────────
         if active_web_search and (not isinstance(mode, str) or mode.lower() == "auto"):

@@ -138,13 +138,13 @@ const PlotlyChart = ({ jsonStr }) => {
       }
 
       const layout = {
-        ...fig.layout,
         autosize: true,
         template: "plotly_dark",
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: "#e0e0e0" },
-        margin: { l: 20, r: 20, t: 40, b: 20 },
+        margin: { l: 50, r: 20, t: 40, b: 40 },
+        ...fig.layout,
       };
 
       const data = Array.isArray(fig.data) ? fig.data : [fig.data];
