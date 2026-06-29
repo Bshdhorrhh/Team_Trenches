@@ -564,9 +564,6 @@ class AgentOrchestrator:
         if required_ctx is None:
             required_ctx = self.context_length if self.context_length > 0 else 8192
 
-        # Force utility models to CPU on limited VRAM systems to prevent memory fragmentation and swapping
-        if getattr(self, 'kaggle_hotswap_mode', False) and model_key in ["router", "vibethinker"]:
-            force_cpu = True
 
         # CRITICAL SEGFAULT PREVENTION: llama.cpp has a known C-level double-free segfault
         # when a GGUF model is closed and re-initialized in the same process to expand context.
