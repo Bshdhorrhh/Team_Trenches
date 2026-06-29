@@ -2605,7 +2605,7 @@ class AgentOrchestrator:
             "crypto price", "stock price", "temperature in"
         ]
         prompt_lower = prompt.lower()
-        active_web_search = (self.search_mode != "off") or any(kw in prompt_lower for kw in search_keywords)
+        active_web_search = (self.search_mode != "off")
 
         web_context = ""
         if active_web_search:
@@ -3258,29 +3258,30 @@ class AgentOrchestrator:
                     
                     # Fetch quick helper web search context
                     helper_search_context = ""
-                    try:
-                        router_llm = self._get_model("router", required_ctx=1024)
-                        search_opt_p = (
-                            "Generate a highly specific search query (3-6 words) to find the correct scientific formula, "
-                            "biological facts, chemical properties, or Python coding syntax to resolve this sandbox verification failure.\n\n"
-                            f"Original Prompt: {prompt}\n"
-                            f"Sandbox Failure Output: {pg_out[:500]}\n"
-                            "Constraint: The search query must be strictly relevant to Python code, mathematics, or the science domain of the prompt. Do NOT search for JavaScript.\n"
-                            "Output ONLY the search query."
-                        )
-                        search_term = self._call_model(router_llm, search_opt_p, max_tokens=30, temperature=0.1).strip()
-                        search_term = search_term.replace('"', '').replace('`', '').strip()
-                        if not search_term or len(search_term) < 5:
-                            search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
-                        
-                        if status_callback:
-                            status_callback(f"Emergency Search: '{search_term}'...", "info", "router", 36 + rnd*10)
-                        
-                        web_res = self.web_search.search(search_term, max_results=3)
-                        if web_res:
-                            helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
-                    except Exception:
-                        pass
+                    if self.search_mode != "off":
+                        try:
+                            router_llm = self._get_model("router", required_ctx=1024)
+                            search_opt_p = (
+                                "Generate a highly specific search query (3-6 words) to find the correct scientific formula, "
+                                "biological facts, chemical properties, or Python coding syntax to resolve this sandbox verification failure.\n\n"
+                                f"Original Prompt: {prompt}\n"
+                                f"Sandbox Failure Output: {pg_out[:500]}\n"
+                                "Constraint: The search query must be strictly relevant to Python code, mathematics, or the science domain of the prompt. Do NOT search for JavaScript.\n"
+                                "Output ONLY the search query."
+                            )
+                            search_term = self._call_model(router_llm, search_opt_p, max_tokens=30, temperature=0.1).strip()
+                            search_term = search_term.replace('"', '').replace('`', '').strip()
+                            if not search_term or len(search_term) < 5:
+                                search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
+                            
+                            if status_callback:
+                                status_callback(f"Emergency Search: '{search_term}'...", "info", "router", 36 + rnd*10)
+                            
+                            web_res = self.web_search.search(search_term, max_results=3)
+                            if web_res:
+                                helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
+                        except Exception:
+                            pass
 
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     search_str = f"Helper Web Context:\n{helper_search_context}\n\n" if helper_search_context else ""
@@ -3417,13 +3418,14 @@ class AgentOrchestrator:
                 if not ok:
                     # Fetch quick helper web search context
                     helper_search_context = ""
-                    try:
-                        search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
-                        web_res = self.web_search.search(search_term, max_results=3)
-                        if web_res:
-                            helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
-                    except Exception:
-                        pass
+                    if self.search_mode != "off":
+                        try:
+                            search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
+                            web_res = self.web_search.search(search_term, max_results=3)
+                            if web_res:
+                                helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
+                        except Exception:
+                            pass
                     search_str = f"Helper Web Context:\n{helper_search_context}\n\n" if helper_search_context else ""
 
                     # OpenCode corrects the code first (already loaded from Phase 3 — no swap needed)
@@ -3510,69 +3512,70 @@ class AgentOrchestrator:
                 lessons = self._extract_failure_lessons(ds_llm, compiled_plan, "\n".join(all_errors))
 
         # All resets exhausted -> Emergency Web Search Healing fallback
-        if status_callback:
-            status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
-        try:
-            error_lines = [line.strip() for line in output.split('\n') if line.strip()]
-            error_query = error_lines[-1] if error_lines else output[:100]
-            if len(error_query) > 120:
-                error_query = error_query[-120:]
-            
-            # Construct a clean search query using only prompt keywords to avoid search engine contamination
-            clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:12])
-            search_term = clean_prompt_query
-            if len(search_term) > 150:
-                search_term = search_term[:150]
-
+        if self.search_mode != "off":
             if status_callback:
-                status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
-            web_results = self.web_search.search(search_term, max_results=3)
-            emergency_context = ""
-            if web_results:
-                emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
-            if emergency_context:
+                status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
+            try:
+                error_lines = [line.strip() for line in output.split('\n') if line.strip()]
+                error_query = error_lines[-1] if error_lines else output[:100]
+                if len(error_query) > 120:
+                    error_query = error_query[-120:]
+                
+                # Construct a clean search query using only prompt keywords to avoid search engine contamination
+                clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:12])
+                search_term = clean_prompt_query
+                if len(search_term) > 150:
+                    search_term = search_term[:150]
+
                 if status_callback:
-                    status_callback("Emergency context acquired. Rewriting script...", "info", "deepseek_r1", 95)
-                ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
-                emergency_prompt = (
-                    f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
-                    f"The previous attempts failed with the following traceback:\n"
-                    f"{output[:800]}\n\n"
-                    f"We searched the web for this error and found the following references:\n"
-                    f"{emergency_context}\n\n"
-                    f"Using this information, rewrite the complete functional Python script to fix the error and satisfy all original constraints.\n"
-                    f"Original plan:\n{compiled_plan[:1500]}\n\n"
-                    f"Output the complete script in a ```python``` block."
-                )
-                esc_resp = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=coder_sys))
-                if "```" in esc_resp:
-                    code = Sandbox.extract_code(esc_resp)
-                    ok, output = self.sandbox.execute(code)
-                    if not ok:
-                        # Attempt exactly 1 round of playground correction for emergency healing
-                        if status_callback:
-                            status_callback("Emergency script failed. Attempting 1 correction round...", "warning", "deepseek_r1", 97)
-                        patch_prompt = (
-                            f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
-                            f"The emergency script failed with the following traceback/error:\n{output[:800]}\n\n"
-                            f"Original code:\n{code[:1500]}\n\n"
-                            f"Using this traceback, rewrite the complete functional Python script to fix the error.\n"
-                            f"Output only the complete corrected script in a ```python``` block."
-                        )
-                        debug_sys = "You are an expert Python debugger. Fix the error in the script. Output only code."
-                        patch_resp = self._strip_thinking(self._call_model(ds_llm, patch_prompt, gen_tokens, gen_temp, system_prompt=debug_sys))
-                        if "```" in patch_resp:
-                            code = Sandbox.extract_code(patch_resp)
-                            ok, output = self.sandbox.execute(code)
-                    if ok:
-                        if status_callback:
-                            status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
-                        self.memory.save(prompt, code)
-                        self.memory.save_mistake(prompt, failed_code, failed_error, code)
-                        router_llm = None; ds_llm = None; oc_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
-                        return self._synthesize_coding_response(prompt, compiled_plan, code, output, router_ctx, oc_ctx, ds_ctx, gen_tokens, gen_temp, status_callback)
-        except Exception as es:
-            print(f"Emergency web search recovery failed: {es}")
+                    status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
+                web_results = self.web_search.search(search_term, max_results=3)
+                emergency_context = ""
+                if web_results:
+                    emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
+                if emergency_context:
+                    if status_callback:
+                        status_callback("Emergency context acquired. Rewriting script...", "info", "deepseek_r1", 95)
+                    ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
+                    emergency_prompt = (
+                        f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
+                        f"The previous attempts failed with the following traceback:\n"
+                        f"{output[:800]}\n\n"
+                        f"We searched the web for this error and found the following references:\n"
+                        f"{emergency_context}\n\n"
+                        f"Using this information, rewrite the complete functional Python script to fix the error and satisfy all original constraints.\n"
+                        f"Original plan:\n{compiled_plan[:1500]}\n\n"
+                        f"Output the complete script in a ```python``` block."
+                    )
+                    esc_resp = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=coder_sys))
+                    if "```" in esc_resp:
+                        code = Sandbox.extract_code(esc_resp)
+                        ok, output = self.sandbox.execute(code)
+                        if not ok:
+                            # Attempt exactly 1 round of playground correction for emergency healing
+                            if status_callback:
+                                status_callback("Emergency script failed. Attempting 1 correction round...", "warning", "deepseek_r1", 97)
+                            patch_prompt = (
+                                f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
+                                f"The emergency script failed with the following traceback/error:\n{output[:800]}\n\n"
+                                f"Original code:\n{code[:1500]}\n\n"
+                                f"Using this traceback, rewrite the complete functional Python script to fix the error.\n"
+                                f"Output only the complete corrected script in a ```python``` block."
+                            )
+                            debug_sys = "You are an expert Python debugger. Fix the error in the script. Output only code."
+                            patch_resp = self._strip_thinking(self._call_model(ds_llm, patch_prompt, gen_tokens, gen_temp, system_prompt=debug_sys))
+                            if "```" in patch_resp:
+                                code = Sandbox.extract_code(patch_resp)
+                                ok, output = self.sandbox.execute(code)
+                        if ok:
+                            if status_callback:
+                                status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
+                            self.memory.save(prompt, code)
+                            self.memory.save_mistake(prompt, failed_code, failed_error, code)
+                            router_llm = None; ds_llm = None; oc_llm = None; coder_llm = None; critic_llm = None; model = None; gc.collect()
+                            return self._synthesize_coding_response(prompt, compiled_plan, code, output, router_ctx, oc_ctx, ds_ctx, gen_tokens, gen_temp, status_callback)
+            except Exception as es:
+                print(f"Emergency web search recovery failed: {es}")
 
         if status_callback:
             status_callback("Max retries reached.", "error", "system", 100)
@@ -3706,28 +3709,29 @@ class AgentOrchestrator:
 
                     # Fetch quick helper web search context to resolve unknown concepts immediately
                     helper_search_context = ""
-                    try:
-                        router_llm = self._get_model("router", required_ctx=1024)
-                        search_opt_p = (
-                            "Generate a highly specific search query (3-6 words) to find the correct scientific formula, "
-                            "biological facts, or chemical properties to resolve this sandbox verification failure.\n\n"
-                            f"Original Prompt: {prompt}\n"
-                            f"Sandbox Failure Output: {pg_out[:500]}\n"
-                            "Output ONLY the search query."
-                        )
-                        search_term = self._call_model(router_llm, search_opt_p, max_tokens=30, temperature=0.1).strip()
-                        search_term = search_term.replace('"', '').replace('`', '').strip()
-                        if not search_term or len(search_term) < 5:
-                            search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
-                        
-                        if status_callback:
-                            status_callback(f"Emergency Search: '{search_term}'...", "info", "router", 36 + rnd*12)
-                        
-                        web_res = self.web_search.search(search_term, max_results=3)
-                        if web_res:
-                            helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
-                    except Exception:
-                        pass
+                    if self.search_mode != "off":
+                        try:
+                            router_llm = self._get_model("router", required_ctx=1024)
+                            search_opt_p = (
+                                "Generate a highly specific search query (3-6 words) to find the correct scientific formula, "
+                                "biological facts, or chemical properties to resolve this sandbox verification failure.\n\n"
+                                f"Original Prompt: {prompt}\n"
+                                f"Sandbox Failure Output: {pg_out[:500]}\n"
+                                "Output ONLY the search query."
+                            )
+                            search_term = self._call_model(router_llm, search_opt_p, max_tokens=30, temperature=0.1).strip()
+                            search_term = search_term.replace('"', '').replace('`', '').strip()
+                            if not search_term or len(search_term) < 5:
+                                search_term = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:10])
+                            
+                            if status_callback:
+                                status_callback(f"Emergency Search: '{search_term}'...", "info", "router", 36 + rnd*12)
+                            
+                            web_res = self.web_search.search(search_term, max_results=3)
+                            if web_res:
+                                helper_search_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_res])
+                        except Exception:
+                            pass
                     search_str = f"Helper Web Context:\n{helper_search_context}\n\n" if helper_search_context else ""
 
                     # Dynamically select correction model: VibeThinker for simple python/code syntax errors, R1 for math/logic
@@ -3771,62 +3775,62 @@ class AgentOrchestrator:
                     ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
                     lessons = self._extract_failure_lessons(ds_llm, ds_answer, "\n".join(all_errors))
 
-            # All resets exhausted -> Emergency Web Search Healing fallback
-            if status_callback:
-                status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
-            try:
-                # Construct a clean search query using only prompt keywords to avoid search engine contamination
-                clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:12])
-                search_term = clean_prompt_query
-                if len(search_term) > 150:
-                    search_term = search_term[:150]
-
+            if self.search_mode != "off":
                 if status_callback:
-                    status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
-                web_results = self.web_search.search(search_term, max_results=3)
-                emergency_context = ""
-                if web_results:
-                    emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
-                if emergency_context:
+                    status_callback("Main pipeline failed. Activating Emergency Web Search...", "warning", "system", 90)
+                try:
+                    # Construct a clean search query using only prompt keywords to avoid search engine contamination
+                    clean_prompt_query = " ".join([word for word in prompt.split() if (len(word) > 3 and word.isalnum())][:12])
+                    search_term = clean_prompt_query
+                    if len(search_term) > 150:
+                        search_term = search_term[:150]
+
                     if status_callback:
-                        status_callback("Emergency context acquired. Final reasoning correction...", "info", "deepseek_r1", 95)
-                    ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
-                    emergency_prompt = (
-                        f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
-                        f"The reasoning explanation failed sandbox verification with the error:\n"
-                        f"{pg_out[:500]}\n\n"
-                        f"We found the following context online for this issue:\n"
-                        f"{emergency_context}\n\n"
-                        f"Correct the derivation/calculation to fix this issue, and formulate the final detailed explanation that perfectly satisfies all original user request constraints.\n"
-                        f"Failed Draft:\n{ds_answer[:1500]}"
-                    )
-                    vibe_answer = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
-                    if not v2:
-                        # Attempt exactly 1 round of playground correction for emergency healing
+                        status_callback(f"Searching: '{search_term}'...", "info", "system", 92)
+                    web_results = self.web_search.search(search_term, max_results=3)
+                    emergency_context = ""
+                    if web_results:
+                        emergency_context = "\n".join([f"- {r.get('title')}: {r.get('snippet', '')}" for r in web_results])
+                    if emergency_context:
                         if status_callback:
-                            status_callback("Emergency verification failed. Attempting 1 correction round...", "warning", "deepseek_r1", 97)
-                        corr_prompt = (
-                            f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
-                            f"The emergency explanation failed verification with this traceback:\n"
-                            f"{vibe_pg_out[:800]}\n\n"
-                            f"Explanation:\n{vibe_answer[:1500]}\n\n"
-                            f"Correct the derivation or logic to fix this error, and provide the complete corrected explanation."
-                        )
+                            status_callback("Emergency context acquired. Final reasoning correction...", "info", "deepseek_r1", 95)
                         ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
-                        vibe_answer = self._strip_thinking(self._call_model(ds_llm, corr_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
+                        emergency_prompt = (
+                            f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
+                            f"The reasoning explanation failed sandbox verification with the error:\n"
+                            f"{pg_out[:500]}\n\n"
+                            f"We found the following context online for this issue:\n"
+                            f"{emergency_context}\n\n"
+                            f"Correct the derivation/calculation to fix this issue, and formulate the final detailed explanation that perfectly satisfies all original user request constraints.\n"
+                            f"Failed Draft:\n{ds_answer[:1500]}"
+                        )
+                        vibe_answer = self._strip_thinking(self._call_model(ds_llm, emergency_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
                         v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
-                    if v2:
-                        if status_callback:
-                            status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
-                        final_answer = self._synthesize_reasoning_explanation(prompt, vibe_answer, vibe_pg_out, ds_ctx, gen_tokens, gen_temp, status_callback, reasoning_sys)
-                        self.memory.save(prompt, final_answer)
-                        self.memory.save_mistake(prompt, ds_answer, pg_out, final_answer)
-                        router_llm = None; ds_llm = None; gc.collect()
-                        viz = self._check_3d_gate(prompt, final_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                        return f"## Verified Answer\n{final_answer}{viz}"
-            except Exception as es:
-                print(f"Emergency reasoning search recovery failed: {es}")
+                        if not v2:
+                            # Attempt exactly 1 round of playground correction for emergency healing
+                            if status_callback:
+                                status_callback("Emergency verification failed. Attempting 1 correction round...", "warning", "deepseek_r1", 97)
+                            corr_prompt = (
+                                f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
+                                f"The emergency explanation failed verification with this traceback:\n"
+                                f"{vibe_pg_out[:800]}\n\n"
+                                f"Explanation:\n{vibe_answer[:1500]}\n\n"
+                                f"Correct the derivation or logic to fix this error, and provide the complete corrected explanation."
+                            )
+                            ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
+                            vibe_answer = self._strip_thinking(self._call_model(ds_llm, corr_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
+                            v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
+                        if v2:
+                            if status_callback:
+                                status_callback("Emergency Search Healing SUCCESSFUL!", "success", "deepseek_r1", 100)
+                            final_answer = self._synthesize_reasoning_explanation(prompt, vibe_answer, vibe_pg_out, ds_ctx, gen_tokens, gen_temp, status_callback, reasoning_sys)
+                            self.memory.save(prompt, final_answer)
+                            self.memory.save_mistake(prompt, ds_answer, pg_out, final_answer)
+                            router_llm = None; ds_llm = None; gc.collect()
+                            viz = self._check_3d_gate(prompt, final_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                            return f"## Verified Answer\n{final_answer}{viz}"
+                except Exception as es:
+                    print(f"Emergency reasoning search recovery failed: {es}")
 
             final_ans = vibe_answer if 'vibe_answer' in locals() else ds_answer
             final_test = vibe_test_code if 'vibe_test_code' in locals() else test_code
