@@ -437,11 +437,7 @@ class AgentOrchestrator:
             return False
         print(f"🧹 DMA-LRU: Evicting '{lru_key}' (least recently used)...")
         with self.inference_lock:
-            if hasattr(model_obj, 'close'):
-                try:
-                    model_obj.close()
-                except Exception as e:
-                    print(f"  Warning: close() failed for '{lru_key}': {e}")
+            self._close_model(model_obj, lru_key)
             del model_obj
         gc.collect()
         if torch:
@@ -534,16 +530,33 @@ class AgentOrchestrator:
                   f"RAM: {self._get_ram_free_gb():.1f} GB free")
         return evicted_any
 
+    def _close_model(self, model_obj, name=None):
+        """Safely close a model object and release its resources (including chat_handler exit_stack)."""
+        if model_obj is None:
+            return
+        # Close any associated chat_handler exit_stack (critical for Llava/Qwen2.5-VL clip model contexts)
+        chat_handler = getattr(model_obj, "chat_handler", None)
+        if chat_handler:
+            exit_stack = getattr(chat_handler, "_exit_stack", None)
+            if exit_stack:
+                try:
+                    exit_stack.close()
+                    if name:
+                        print(f"🧹 Closed chat handler exit_stack for '{name}'")
+                except Exception as e:
+                    print(f"Warning: Failed to close chat handler exit_stack for '{name or 'model'}': {e}")
+        if hasattr(model_obj, 'close'):
+            try:
+                model_obj.close()
+            except Exception as e:
+                print(f"Warning: close() failed for '{name or 'model'}': {e}")
+
     def unload_all_models(self):
         """Nuclear option: deterministically unload every cached model."""
         with self.inference_lock:
             for key in list(self.loaded_models.keys()):
                 model_obj = self.loaded_models[key]
-                if hasattr(model_obj, 'close'):
-                    try:
-                        model_obj.close()
-                    except Exception as e:
-                        print(f"Warning: Failed to close model '{key}': {e}")
+                self._close_model(model_obj, key)
                 del self.loaded_models[key]
             
             self.loaded_models.clear()
@@ -591,9 +604,7 @@ class AgentOrchestrator:
                 with self.model_lock:
                     # Unload CPU version
                     self.loaded_models.pop(model_key, None)
-                    if hasattr(model_obj, "close"):
-                        try: model_obj.close()
-                        except: pass
+                    self._close_model(model_obj, model_key)
                     del model_obj
                     gc.collect()
             # Case 2: We want it on CPU (force_cpu) but it's currently on GPU (VRAM)
@@ -602,9 +613,7 @@ class AgentOrchestrator:
                 with self.model_lock:
                     # Unload GPU version
                     self.loaded_models.pop(model_key, None)
-                    if hasattr(model_obj, "close"):
-                        try: model_obj.close()
-                        except: pass
+                    self._close_model(model_obj, model_key)
                     del model_obj
                     gc.collect()
             else:
@@ -628,11 +637,7 @@ class AgentOrchestrator:
             if hasattr(model_obj, "n_ctx") and required_ctx > model_obj.n_ctx():
                 print(f"🔄 Reloading '{model_key}' to expand context: {model_obj.n_ctx()} -> {required_ctx}")
                 with self.inference_lock:
-                    if hasattr(model_obj, 'close'):
-                        try:
-                            model_obj.close()
-                        except Exception:
-                            pass
+                    self._close_model(model_obj, model_key)
                     del self.loaded_models[model_key]
                     if model_key in self.model_access_order:
                         self.model_access_order.remove(model_key)
@@ -673,11 +678,7 @@ class AgentOrchestrator:
                         model_obj = self.loaded_models.pop(mk, None)
                         if mk in self.model_access_order:
                             self.model_access_order.remove(mk)
-                        if hasattr(model_obj, 'close'):
-                            try:
-                                model_obj.close()
-                            except Exception:
-                                pass
+                        self._close_model(model_obj, mk)
                         del model_obj
                 gc.collect()
                 try:
