@@ -620,21 +620,26 @@ class Sandbox:
                 f"Write shorter, more concise code if necessary to avoid hitting output limits."
             )
 
-        # Prepend compatibility monkeypatch for NumPy < 2.0 (e.g. numpy==1.26.4) and rocketpy
-        compat_code = (
-            "import sys\n"
-            "try:\n"
-            "    import matplotlib\n"
-            "    matplotlib.use('Agg')\n"
-            "except Exception:\n"
-            "    pass\n"
-            "try:\n"
-            "    import numpy as _np\n"
-            "    if not hasattr(_np, 'trapezoid'):\n"
-            "        _np.trapezoid = getattr(_np, 'trapz', None)\n"
-            "except Exception:\n"
-            "    pass\n\n"
-        ) + code
+        # Prepend compatibility monkeypatch dynamically depending on imports in code
+        compat_lines = []
+        if "matplotlib" in code or "plt" in code:
+            compat_lines.extend([
+                "try:",
+                "    import matplotlib",
+                "    matplotlib.use('Agg')",
+                "except Exception:",
+                "    pass"
+            ])
+        if "numpy" in code or "np" in code:
+            compat_lines.extend([
+                "try:",
+                "    import numpy as _np",
+                "    if not hasattr(_np, 'trapezoid'):",
+                "        _np.trapezoid = getattr(_np, 'trapz', None)",
+                "except Exception:",
+                "    pass"
+            ])
+        compat_code = "\n".join(compat_lines) + "\n\n" + code
 
         # Write the AI's code to a temp file
         code_file = tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False)
@@ -715,26 +720,33 @@ class Sandbox:
         Fallback: Execute Python code in a standard subprocess without restrictions.
         Used when the restricted sandbox blocks a legitimate module the AI needs.
         """
-        # Prepend compatibility monkeypatch for NumPy < 2.0 (e.g. numpy==1.26.4) and rocketpy
-        compat_code = (
-            "import sys\n"
-            "try:\n"
-            "    import matplotlib\n"
-            "    matplotlib.use('Agg')\n"
-            "except Exception:\n"
-            "    pass\n"
-            "try:\n"
-            "    import numpy as _np\n"
-            "    if not hasattr(_np, 'trapezoid'):\n"
-            "        _np.trapezoid = getattr(_np, 'trapz', None)\n"
-            "except Exception:\n"
-            "    pass\n"
-            "try:\n"
-            "    from backend.sandbox import SandboxDataHelper\n"
-            "except Exception:\n"
-            "    pass\n"
-            "sys.argv = ['script.py']\n\n"
-        ) + code
+        # Prepend compatibility monkeypatch dynamically depending on imports in code
+        compat_lines = ["import sys"]
+        if "matplotlib" in code or "plt" in code:
+            compat_lines.extend([
+                "try:",
+                "    import matplotlib",
+                "    matplotlib.use('Agg')",
+                "except Exception:",
+                "    pass"
+            ])
+        if "numpy" in code or "np" in code:
+            compat_lines.extend([
+                "try:",
+                "    import numpy as _np",
+                "    if not hasattr(_np, 'trapezoid'):",
+                "        _np.trapezoid = getattr(_np, 'trapz', None)",
+                "except Exception:",
+                "    pass"
+            ])
+        compat_lines.extend([
+            "try:",
+            "    from backend.sandbox import SandboxDataHelper",
+            "except Exception:",
+            "    pass",
+            "sys.argv = ['script.py']"
+        ])
+        compat_code = "\n".join(compat_lines) + "\n\n" + code
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
             f.write(compat_code)
