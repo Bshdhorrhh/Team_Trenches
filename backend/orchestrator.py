@@ -3662,8 +3662,8 @@ class AgentOrchestrator:
                 helper_search_context = ""
                 for rnd in range(max_rounds):
                     is_nuclear = (reset > 0)
-                    model_key = "deepseek_r1" if is_nuclear else "vibethinker"
-                    model_name = "DeepSeek-R1" if is_nuclear else "VibeThinker"
+                    model_key = "deepseek_r1"
+                    model_name = "DeepSeek-R1"
                     
                     ds_llm = self._get_model(model_key, required_ctx=ds_ctx)
                     if status_callback:
@@ -3730,9 +3730,14 @@ class AgentOrchestrator:
                         pass
                     search_str = f"Helper Web Context:\n{helper_search_context}\n\n" if helper_search_context else ""
 
-                    # DeepSeek-R1-7B corrects its own draft (zero model swap latency)
+                    # Dynamically select correction model: VibeThinker for simple python/code syntax errors, R1 for math/logic
+                    err_lower = pg_out.lower() if pg_out else ""
+                    is_code_error = any(x in err_lower for x in ["syntaxerror", "indentationerror", "nameerror", "modulenotfounderror", "attributeerror", "typeerror", "zerodivisionerror"])
+                    corr_model_key = "vibethinker" if (is_code_error and not is_nuclear) else "deepseek_r1"
+                    corr_model_name = "VibeThinker" if corr_model_key == "vibethinker" else "DeepSeek-R1"
+
                     if status_callback:
-                        status_callback(f"DeepSeek-R1 correcting reasoning (Attempt {rnd+1}/{max_rounds})...", "warning", "deepseek_r1", 45 + rnd*12)
+                        status_callback(f"{corr_model_name} correcting reasoning (Attempt {rnd+1}/{max_rounds})...", "warning", corr_model_key, 45 + rnd*12)
                     vibe_p = (
                         f"ORIGINAL USER REQUEST CONSTRAINTS:\n{prompt}\n\n"
                         f"{search_str}"
@@ -3740,12 +3745,12 @@ class AgentOrchestrator:
                         f"Error:\n{pg_out[:1000]}\nProvide a corrected, complete answer. "
                         f"IMPORTANT: You MUST write out all algebraic equations and derivations in clear LaTeX format ($...$ and $$...$$)."
                     )
-                    ds_llm = self._get_model("deepseek_r1", required_ctx=ds_ctx)
+                    ds_llm = self._get_model(corr_model_key, required_ctx=ds_ctx)
                     vibe_answer = self._strip_thinking(self._call_model(ds_llm, vibe_p, gen_tokens, gen_temp, system_prompt=reasoning_sys))
-                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key="deepseek_r1", original_prompt=prompt)
+                    v2, vibe_pg_out, vibe_test_code = self._run_playground(ds_llm, vibe_answer, "reasoning", status_callback=status_callback, model_key=corr_model_key, original_prompt=prompt)
                     if v2:
                         if status_callback:
-                            status_callback("DeepSeek-R1's correction VERIFIED!", "success", "deepseek_r1", 80)
+                            status_callback(f"{corr_model_name}'s correction VERIFIED!", "success", corr_model_key, 80)
                         final_answer = self._synthesize_reasoning_explanation(prompt, vibe_answer, vibe_pg_out, ds_ctx, gen_tokens, gen_temp, status_callback, reasoning_sys)
                         self.memory.save(prompt, final_answer)
                         self.memory.save_mistake(prompt, ds_answer, pg_out, final_answer)

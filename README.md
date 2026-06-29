@@ -87,8 +87,8 @@ The system is constructed with a highly decoupled client-server architecture uti
    SIMPLE         CODING        REASONING       PREDICTION      EXTREME SEARCH    3D VIZ
     │               │               │               │                │              │
     ▼               ▼               ▼               ▼                ▼              ▼
-Phi-3.5-Mini   OpenCodeDS     VibeThinker 3B  OpenCodeDS       DeepSeek R1    OpenCodeDS
- Direct Ans    Actor-Critic    / DeepSeek R1   ML Regression   Deep Analysis   WebGL & JS
+Phi-3.5-Mini   OpenCodeDS     DeepSeek R1-7B  OpenCodeDS       DeepSeek R1    OpenCodeDS
+ Direct Ans    Actor-Critic   / VibeThinker 3B ML Regression   Deep Analysis   WebGL & JS
     │               │               │               │                │              │
     ▼               ▼               ▼               ▼                ▼              ▼
 Web Search    Execution      Verification +    Data Cleaning   OpenCodeDS     Reflexion
@@ -125,15 +125,17 @@ flowchart TD
 
     %% ── 2. REASONING PATHWAY ──
     PATH_REASONING --> REASON_BRANCH{"Playground Verifiable?"}
-    REASON_BRANCH -->|Yes| VT_DRAFT["VibeThinker 3B: Draft Core Logic Plan"]
-    VT_DRAFT --> REASON_SB{"Execution Sandbox"}
+    REASON_BRANCH -->|Yes| DS_DRAFT["DeepSeek R1-7B: Draft Core LaTeX Answer + CoT"]
+    DS_DRAFT --> REASON_SB{"Execution Sandbox"}
     
     REASON_SB -->|Verified Success| DS_SYNTH["DeepSeek R1-7B: Synthesize detailed LaTeX Explanation"]
     DS_SYNTH --> REASON_PASS["Pass final verified math solution"]
     
-    REASON_SB -->|Crash/Failure| REASON_FAIL["Emergency Web Search"]
-    REASON_FAIL --> DS_MATH_FIX["DeepSeek R1-7B: Correct logic plan using SearchQA web facts"]
-    DS_MATH_FIX --> REASON_SB
+    REASON_SB -->|Crash/Failure| ERROR_CHECK{"Is simple Code/Syntax error?"}
+    ERROR_CHECK -->|Yes| VT_FIX["VibeThinker 3B: Rapid logic/code patch"]
+    ERROR_CHECK -->|No| DS_FIX["DeepSeek R1-7B: Core math self-correction"]
+    VT_FIX --> REASON_SB
+    DS_FIX --> REASON_SB
 
     REASON_BRANCH -->|No| DS_THEORY["DeepSeek R1-7B: Direct detailed academic LaTeX derivation"]
     DS_THEORY --> REASON_PASS
@@ -212,7 +214,7 @@ flowchart TD
 
 1. **SIMPLE:** Fast, direct answers utilizing Phi-3.5-Mini. Best for general conversations and basic tasks.
 2. **CODING:** OpenCodeInterpreter 6.7B acts as the generator, with an execution-driven feedback loop verifying code correctness.
-3. **REASONING:** A two-stage hybrid flow. VibeThinker 3B executes verifiable symbolic logic in the playground sandbox, and DeepSeek-R1-7B synthesizes the final detailed LaTeX explanation. Conceptual math/physics queries bypass the playground and route directly to DeepSeek-R1-7B.
+3. **REASONING:** A sandbox-verified hybrid flow. DeepSeek-R1-7B drafts the core LaTeX explanation and chain-of-thought, which is verified in the sandbox. If errors occur, it dynamically routes code/syntax corrections to VibeThinker 3B, or math/logic corrections back to DeepSeek-R1-7B, before R1 synthesizes the final response. Conceptual math/physics queries bypass the playground and route directly to DeepSeek-R1-7B.
 4. **PREDICTION:** A specialized ML pipeline that scrapes target web sources, cleans data frames, performs model fitting (Scikit-Learn/SciPy), and outputs regression/forecast statistics.
 5. **EXTREME WEBSEARCH:** Employs DeepSeek R1-7B to perform deep thematic synthesis over scraped pages, feeding key data arrays into OpenCodeInterpreter to produce Plotly visualizations.
 6. **3D VISUALIZATION:** Generates interactive Three.js physics scenes or Plotly.js canvases rendered directly in the web frontend.
