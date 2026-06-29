@@ -3627,9 +3627,9 @@ class AgentOrchestrator:
                 vibe_pg_out = ""
                 helper_search_context = ""
                 for rnd in range(max_rounds):
-                    # Re-acquire ds_llm because other models may have evicted it in the previous round
-                    model_key = "deepseek_r1"
-                    model_name = "DeepSeek-R1"
+                    is_nuclear = (reset > 0)
+                    model_key = "deepseek_r1" if is_nuclear else "vibethinker"
+                    model_name = "DeepSeek-R1" if is_nuclear else "VibeThinker"
                     
                     ds_llm = self._get_model(model_key, required_ctx=ds_ctx)
                     if status_callback:
@@ -3661,10 +3661,35 @@ class AgentOrchestrator:
                     if verified:
                         if status_callback:
                             status_callback("Reasoning VERIFIED!", "success", model_key, 80)
-                        self.memory.save(prompt, ds_answer)
+                        
+                        # Hybrid synthesis stage: If VibeThinker verified the math, let DeepSeek-R1 write the final detailed LaTeX explanation
+                        if model_key == "vibethinker":
+                            if status_callback:
+                                status_callback("DeepSeek-R1 synthesizing detailed explanation...", "info", "deepseek_r1", 85)
+                            ds_r1 = self._get_model("deepseek_r1", required_ctx=ds_ctx)
+                            synthesis_prompt = (
+                                f"USER REQUEST:\n{prompt}\n\n"
+                                f"VERIFIED MATHEMATICAL SOLUTION ROOT:\n{ds_answer}\n\n"
+                                f"SANDBOX RUN LOGS:\n{pg_out}\n\n"
+                                "You are a master academic editor and scientific writer.\n"
+                                "Using the verified mathematical solution above as the absolute ground truth, "
+                                "write an exhaustive, detailed, academic-grade explanation/derivation.\n"
+                                "Ensure you follow all rules:\n"
+                                "- Wrap all of your internal reasoning/drafting steps inside <think>...</think> tags. After closing the </think> tag, output the final polished, beautifully formatted response.\n"
+                                "- Write all math in LaTeX ($...$ for inline, $$...$$ for display equations).\n"
+                                "- State all assumptions explicitly at the beginning.\n"
+                                "- Define all variables with their units before using them.\n"
+                                "- Verify dimensional consistency of every equation.\n"
+                                "- Do NOT copy any placeholder/dummy variables. Output a fully complete, professional solution."
+                            )
+                            final_answer = self._strip_thinking(self._call_model(ds_r1, synthesis_prompt, gen_tokens, gen_temp, system_prompt=reasoning_sys))
+                        else:
+                            final_answer = ds_answer
+
+                        self.memory.save(prompt, final_answer)
                         router_llm = None; ds_llm = None; gc.collect()
-                        viz = self._check_3d_gate(prompt, ds_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
-                        return f"## Verified Answer\n{ds_answer}{viz}"
+                        viz = self._check_3d_gate(prompt, final_answer, router_ctx, oc_ctx, gen_tokens, gen_temp, status_callback)
+                        return f"## Verified Answer\n{final_answer}{viz}"
 
                     # Fetch quick helper web search context to resolve unknown concepts immediately
                     helper_search_context = ""
